@@ -1,0 +1,17 @@
+{
+  "name": "tv",
+  "version": "1.0.0",
+  "main": "index.js",
+  "author": "Dan Rosén <dan.rosen@gu.se>",
+  "license": "MIT",
+  "devDependencies": {
+    "html-webpack-plugin": "^3.2.0",
+    "parcel": "^1.12.4",
+    "parcel-plugin-static-files-copy": "^2.2.1",
+    "typescript": "^3.6.3"
+  },
+  "dependencies": {
+    "jsep": "^0.3.4",
+    "logic-solver": "^2.0.1"
+  }
+}
