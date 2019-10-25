@@ -4,7 +4,7 @@ function template_to_string(value, ...more) {
   if (typeof value == 'string') {
     return value
   }
-  return value.map((s, i) => s + (more[i] || '')).join('')
+  return value.map((s, i) => s + (more[i] === undefined ? '' : more[i])).join('')
 }
 
 function forward(f, g) {

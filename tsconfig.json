@@ -1,6 +1,7 @@
 {
   "compilerOptions": {
-    "target": "es2015",
+    "target": "es5",
+    "lib": ["es2019", "dom"],
     "allowJs": true,
     "checkJs": true,
     "sourceMap": true,

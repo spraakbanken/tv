@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "jsep": "^0.3.4",
+    "json-stringify-pretty-compact": "^2.0.0",
     "logic-solver": "^2.0.1"
   }
 }
