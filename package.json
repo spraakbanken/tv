@@ -7,12 +7,9 @@
   "devDependencies": {
     "html-webpack-plugin": "^3.2.0",
     "parcel": "^1.12.4",
-    "parcel-plugin-static-files-copy": "^2.2.1",
     "typescript": "^3.6.3"
   },
   "dependencies": {
-    "jsep": "^0.3.4",
-    "json-stringify-pretty-compact": "^2.0.0",
-    "logic-solver": "^2.0.1"
+    "json-stringify-pretty-compact": "^2.0.0"
   }
 }
