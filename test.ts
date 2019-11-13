@@ -30,7 +30,7 @@ export function test<B>(fn: (...a: any[]) => B, ...args: any[]): Settable<B> {
   return Object.create(null, {
     is: {
       set(rhs) {
-        test_impl(`${fn_name}(${args.map(pretty).join(", ")})`, fn(...args), rhs)
+        test_impl(`${fn_name}(${args.map(pretty as any).join(", ")})`, fn(...args), rhs)
       }
     },
   })

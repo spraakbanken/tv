@@ -1,11 +1,10 @@
 import {test, test_eval} from "./test.ts"
 
 export function nub<A>(xs: A[]): A[] {
-  const seen = {} as Record<string, boolean>
+  const seen = new Set<A>()
   return xs.filter(x => {
-    const s = x.toString()
-    const duplicate = s in seen
-    seen[s] = true
+    const duplicate = seen.has(x)
+    duplicate || seen.add(x)
     return !duplicate
   })
 }
@@ -154,3 +153,4 @@ test(drop_while_both_ends, [1,2,3], i => i != 1).is = [1]
 test(drop_while_both_ends, [1,2,3], i => i != 2).is = [2]
 test(drop_while_both_ends, [1,2,3], i => i == 1).is = [2, 3]
 test(drop_while_both_ends, [1,2,3], i => false).is = [1, 2, 3]
+

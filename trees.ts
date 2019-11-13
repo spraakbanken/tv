@@ -38,8 +38,6 @@ interface Node {
   children?: string[]
 }
 
-// type expr = number | {op: 'mid' | 'max', children: expr[]}
-
 const G = (name: string | number, ...spec0: Node[]) => {
   const spec = utils.topo(spec0)
   // console.log({spec0, spec})
@@ -91,8 +89,7 @@ const G = (name: string | number, ...spec0: Node[]) => {
 
   const lines = [] as any[]
 
-  const has_parent: Record<string, true> = {}
-  spec.forEach(e => (e.children || []).forEach(ch => has_parent[ch] = true))
+  const has_parent = new Set(spec.flatMap(e => e.children || []))
 
   spec.forEach((s, i) => {
 
@@ -137,16 +134,16 @@ const G = (name: string | number, ...spec0: Node[]) => {
         mid: next_terminal_x + state[s.id].text_width / 2,
         y: 0,
         top: state[s.id].text_height,
-        parent_placed: !(s.id in has_parent),
+        parent_placed: !has_parent.has(s.id),
       }
       next_terminal_x += state[s.id].text_width + gap_x
     } else {
-      const children = s.children
-      const my_children = Object.fromEntries(children.map(id => [id, true]))
+      const {children} = s
+      const children_set = new Set(children)
       const active_below: {x: number, top: number, id: string, mine: boolean}[] =
         Object.entries(state).flatMap(([id, s]) => {
           const active = s.left && !s.parent_placed
-          const mine = my_children[id]
+          const mine = children_set.has(id)
           if (mine || active) {
             return [{x: s.left, top: s.top, id, mine}, {x: s.right, top: s.top, id, mine}]
           } else {
@@ -173,13 +170,13 @@ const G = (name: string | number, ...spec0: Node[]) => {
         return {ids, score}
       }).sort((a, b) => b.score - a.score)
 
-      const above_children = groups[0].ids
+      const main_children = groups[0].ids
       const leftmost_mid = Math.min(...children.map(id => state[id].mid))
       const rightmost_mid = Math.max(...children.map(id => state[id].mid))
-      const left_mid = Math.min(...above_children.map(id => state[id].mid))
-      const right_mid = Math.max(...above_children.map(id => state[id].mid))
-      const left = Math.min(...above_children.map(id => state[id].left))
-      const right = Math.max(...above_children.map(id => state[id].right))
+      const left_mid = Math.min(...main_children.map(id => state[id].mid))
+      const right_mid = Math.max(...main_children.map(id => state[id].mid))
+      const left = Math.min(...main_children.map(id => state[id].left))
+      const right = Math.max(...main_children.map(id => state[id].right))
 
       // be above everything from where I begin to where I end
       const my_reach = utils.drop_while_both_ends(active_below, e => !e.mine)
@@ -193,7 +190,7 @@ const G = (name: string | number, ...spec0: Node[]) => {
         mid: (left_mid + right_mid) / 2,
         y,
         top: y + state[s.id].text_height,
-        parent_placed: false
+        parent_placed: !has_parent.has(s.id),
       }
       children.forEach(id => {
         state[id].parent_placed = true
