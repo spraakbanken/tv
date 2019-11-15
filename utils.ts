@@ -92,7 +92,7 @@ test(perms, [1, 2]).is = [[1, 2], [2, 1]]
 
 test(() => perms([1, 2, 3]).length).is = 6
 
-export function topo<A extends {id: Id, children?: Id[]}>(spec: A[]): A[] {
+export function toposort<A extends {id: Id, children?: Id[]}>(spec: A[]): A[] {
   const placed = {}
   const queue = {}
   const out = []
@@ -115,7 +115,7 @@ export function topo<A extends {id: Id, children?: Id[]}>(spec: A[]): A[] {
 
 {
   const subject = [{id: 1}, {id: 2, children: [1]}, {id: 3, children: [2]}]
-  perms(subject).forEach(ys => test(topo, ys).is = subject)
+  perms(subject).forEach(ys => test(toposort, ys).is = subject)
 }
 
 export function drop_while<A>(xs: A[], p: (a: A) => boolean) {
@@ -154,3 +154,21 @@ test(drop_while_both_ends, [1,2,3], i => i != 2).is = [2]
 test(drop_while_both_ends, [1,2,3], i => i == 1).is = [2, 3]
 test(drop_while_both_ends, [1,2,3], i => false).is = [1, 2, 3]
 
+export function partition<A>(xs: A[], p: (a: A) => boolean) {
+  const yes = [] as A[]
+  const no = [] as A[]
+  xs.forEach(x => (p(x) ? yes : no).push(x))
+  return [yes, no]
+}
+
+test(partition, [1,2,3,4,5], x => x % 2 == 0).is = [[2, 4], [1, 3, 5]]
+
+export function by<T extends Record<string, any>>(k: keyof T, xs: T[]): Record<string, T> {
+  return Object.fromEntries(xs.map(s => [s[k], s])) as any
+}
+
+{
+  const a = {id: 'a', v: 1}
+  const b = {id: 'b', w: 2}
+  test(by, 'id', [a, b]).is = {a, b}
+}

@@ -31,121 +31,278 @@ if (!document.querySelector('style')) {
 
 const page = []
 
-interface Node {
+type Spec<A> = SpecEntry<A>[]
+
+interface SpecEntry<A> {
   id: string,
-  label?: string,
-  flabel?: string,
   children?: string[]
+  label: A,
+  flabel?: A,
 }
 
-const G = (name: string | number, ...spec0: Node[]) => {
-  const spec = utils.topo(spec0)
-  // console.log({spec0, spec})
+type Diff = (e?: Element) => Element
 
-  interface State {
-    label: string,
-    flabel: string,
-    text_width: number,
-    text_height: number,
-    left: number,
-    right: number,
-    mid: number,
-    y: number,
-    top: number,
-    parent_placed: boolean,
-    parent_top: number,
-    right_align: boolean,
+interface DiffWithRect {
+  diff: Diff
+  rect: {
+    width: number,
+    height: number
+  }
+  from_source?: string
+}
+
+const zero_rect = {height: 0, width: 0}
+const zero: DiffWithRect = {
+  diff: span(px(zero_rect)),
+  rect: zero_rect,
+}
+
+interface node {
+  left: number
+  right: number
+  mid: number
+  top: number
+}
+
+function px(d: Record<string, number>): any {
+  return style(
+    Object.entries(d).map(([k, v]) => `${k}: ${Math.round(v * 10) / 10}px`).join('; ') + ';')
+}
+
+function Graphics(
+  gap_x = 12,
+  gap_under_label = 2,
+  gap_under_flabel = 2,
+  gap_to_flabel = 8,
+  line_width = 2,
+  line_gap = 4,
+) {
+
+  const hline = (bottom: number, left: number, right: number) =>
+    div(
+      css`position: absolute`,
+      css`background: black`,
+      px({
+        left,
+        width: right - left,
+        bottom,
+        height: line_width
+      }),
+      style`z-index: 1;`,
+    )
+
+  const vline = (x: number, bottom: number, top: number) => [
+    div(
+      css`position: absolute`,
+      css`background: white`,
+      px({
+        left: x - line_gap / 2,
+        width: line_width + line_gap,
+        bottom,
+        height: top - bottom,
+      }),
+      style`z-index: 2;`,
+    ),
+    div(
+      css`position: absolute`,
+      css`background: black`,
+      px({
+        left: x,
+        width: line_width,
+        bottom,
+        height: top - bottom,
+      }),
+      style`z-index: 3;`,
+    )
+  ]
+
+
+  let next_x = 0
+
+  const draw = [] as any
+  let width = 0
+  let height = 0
+
+  const tapped = (n: node) => {
+    width = Math.max(width, n.right)
+    height = Math.max(height, n.top)
+    return n
   }
 
-  const state = {} as Record<string, State>
+  return {
+    draw() {
+      return div(
+        css`position: relative`,
+        px({width, height: height + 15}),
+        ...draw
+      )
+    },
+    terminal(element: DiffWithRect): node {
+      const left = next_x
+      next_x += element.rect.width
+      const right = next_x
+      next_x += gap_x
+      const mid = (left + right) / 2
+      draw.push(
+        div(
+          css`position: absolute`,
+          px({left, bottom: 0}),
+          element.diff,
+        ))
+      return tapped({
+        left,
+        right,
+        mid,
+        top: element.rect.height,
+      })
+    },
+    nonterminal(
+      label: DiffWithRect,
+      main: {node: node, flabel: DiffWithRect}[],
+      other: {node: node, flabel: DiffWithRect}[],
+      reach: node[],
+    ): node {
+      const all = main.concat(other)
 
-  const measure_root = document.body
+      let leftmost_mid = Math.min(...all.map(x => x.node.mid))
+      let rightmost_mid = Math.max(...all.map(x => x.node.mid))
 
-  spec.forEach(s => {
-    const span = document.createElement('span')
-    span.className = 'measure'
-    measure_root.append(span)
-    const label = s.label || s.id
-    span.innerHTML = label
-    const root = span.getBoundingClientRect()
-    state[s.id] = {
-      id: s.id,
-      text_width: root.width,
-      text_height: root.height,
-      label,
-      flabel: s.flabel || ''
-    } as any as State
-    measure_root.removeChild(span)
+      if (all.length == 1) {
+        leftmost_mid = main[0].node.mid - label.rect.width / 2
+        rightmost_mid = main[0].node.mid + label.rect.width / 2
+      }
+
+      const left_mid = Math.min(...main.map(x => x.node.mid))
+      const right_mid = Math.max(...main.map(x => x.node.mid))
+      const left = Math.min(...main.map(x => x.node.left))
+      const right = Math.max(...main.map(x => x.node.right))
+
+      const mid = (left_mid + right_mid) / 2
+
+      const reach_top = Math.max(...reach.map(e => e.top))
+
+      // const flabelled = all.filter(e => e.flabel) as {node: node, flabel: DiffWithRect}[]
+      const flabels_height = Math.max(0, ...all.map(r => r.flabel.rect.height))
+
+      const line_y = reach_top + gap_to_flabel + flabels_height + gap_under_flabel
+
+      const top = line_y + line_width + gap_under_label + label.rect.height
+
+      draw.push(
+        ...all.map(e =>
+          div(
+            css`position: absolute`,
+            css`white-space: nowrap`,
+            px({
+              left: e.node.mid,
+              bottom: reach_top + gap_to_flabel,
+            }),
+            css`transform: translate(-50%, 0); `,
+            e.flabel.diff,
+          )
+        ),
+        div(
+          css`position: absolute`,
+          px({
+            left: mid - label.rect.width / 2,
+            bottom: line_y + gap_under_label,
+          }),
+          label.diff,
+        ),
+        hline(line_y, leftmost_mid, rightmost_mid + line_width),
+        ...vline(mid, line_y + line_width, line_y + line_width + gap_under_label),
+        ...all.flatMap(e => [
+          ...vline(e.node.mid, e.node.top, reach_top + gap_to_flabel),
+          ...vline(e.node.mid, line_y - gap_under_flabel - (flabels_height - e.flabel.rect.height), line_y),
+        ])
+      )
+
+      return tapped({
+        top,
+        mid,
+        left,
+        right,
+      })
+    }
+  }
+}
+
+const try_span = (s?: string) => s ? span(s) : span(px({height: 0, width: 0}))
+
+function measure_spec(measure_root: Element, spec: Spec<string | undefined>): Spec<DiffWithRect> {
+
+  const p = {} as Record<string, Element>
+
+  const position = (text: string) => {
+    if (text in p) {
+      return p[text]
+    }
+    const diff = try_span(text)
+    const e = diff()
+    measure_root.appendChild(e)
+    p[text] = e
+  }
+
+  spec.forEach(e => {
+    e.label && position(e.label)
+    e.flabel && position(e.flabel)
   })
 
-  const gap_x = 3 * Object.values(state)[0].text_height / 3
-  const gap_y = 2 * Object.values(state)[0].text_height / 3
-  let next_terminal_x = 0
+  function measure(text?: string) {
+    if (text === undefined || text === '') {
+      return zero
+    } else {
+      const rect = p[text].getBoundingClientRect()
+      const diff = try_span(text)
+      return {
+        diff,
+        from_source: text,
+        rect: {width: rect.width, height: rect.height},
+      }
+    }
+  }
 
-  const line_gap = 4
-  const line_width = 2
+  const out_spec = spec.map(e => {
+    return {
+      ...e,
+      label: measure(e.label),
+      flabel: measure(e.flabel),
+    }
+  })
+
+  Object.values(p).forEach(e => measure_root.removeChild(e))
+
+  return out_spec
+}
+
+const G = (name: string | number, ...spec0: Spec<string | undefined>) => {
+  const spec = measure_spec(document.body, utils.toposort(spec0))
+  const spec_by_id = utils.by('id', spec)
+
+  const state = {} as Record<string, node & {parent_placed: boolean}>
 
   const msgs: string[] = []
 
-  const lines = [] as any[]
-
   const has_parent = new Set(spec.flatMap(e => e.children || []))
 
-  spec.forEach((s, i) => {
+  const graphics = Graphics()
 
-    const hline = (y: number, left: number, right: number) => {
-      lines.push(div(
-        css`position: absolute`,
-        css`background: black`,
-        style`left: ${(left)}px;`,
-        style`width: ${(right - left)}px;`,
-        style`bottom: ${(y)}px;`,
-        style`height: ${line_width}px;`,
-        style`z-index: ${i+1};`,
-      ))
-    }
-
-    const vline = (x: number, bot: number, top: number) => {
-      lines.push(div(
-        css`position: absolute`,
-        css`background: white`,
-        style`left: ${(x - line_gap / 2)}px;`,
-        style`width: ${line_width + line_gap}px;`,
-        style`bottom: ${(bot)}px;`,
-        style`height: ${(top - bot)}px;`,
-        style`z-index: ${100+i};`,
-      ))
-      lines.push(div(
-        css`position: absolute`,
-        css`background: black`,
-        style`left: ${(x)}px;`,
-        style`width: ${line_width}px;`,
-        style`bottom: ${(bot)}px;`,
-        style`height: ${(top - bot)}px;`,
-        style`z-index: ${100+i};`,
-      ))
-    }
+  spec.forEach(s => {
 
     if (!s.children || s.children.length == 0) {
       state[s.id] = {
-        ...state[s.id],
-        left: next_terminal_x,
-        right: next_terminal_x + state[s.id].text_width,
-        mid: next_terminal_x + state[s.id].text_width / 2,
-        y: 0,
-        top: state[s.id].text_height,
+        ...graphics.terminal(s.label),
         parent_placed: !has_parent.has(s.id),
       }
-      next_terminal_x += state[s.id].text_width + gap_x
     } else {
       const {children} = s
       const children_set = new Set(children)
-      const active_below: {x: number, top: number, id: string, mine: boolean}[] =
+      const active_below: (node & {x: number, id: string, mine: boolean})[] =
         Object.entries(state).flatMap(([id, s]) => {
           const active = s.left && !s.parent_placed
           const mine = children_set.has(id)
           if (mine || active) {
-            return [{x: s.left, top: s.top, id, mine}, {x: s.right, top: s.top, id, mine}]
+            return [{...s, x: s.left, id, mine}, {...s, x: s.right, id, mine}]
           } else {
             return []
           }
@@ -164,49 +321,43 @@ const G = (name: string | number, ...spec0: Node[]) => {
         const xmax = Math.max(...xs)
         const ids = g.map(e => e.id)
         const width = xmax - xmin
-        const flabels = ids.map(id => state[id].flabel)
-        const has_HD = flabels.some(l => l == 'HD')
+        const flabels = ids.map(id => spec_by_id[id].flabel)
+        const has_HD = flabels.some(l => l !== undefined && l.from_source == 'HD')
         const score = width + 100000 * +has_HD
         return {ids, score}
       }).sort((a, b) => b.score - a.score)
 
-      const main_children = groups[0].ids
-      const leftmost_mid = Math.min(...children.map(id => state[id].mid))
-      const rightmost_mid = Math.max(...children.map(id => state[id].mid))
-      const left_mid = Math.min(...main_children.map(id => state[id].mid))
-      const right_mid = Math.max(...main_children.map(id => state[id].mid))
-      const left = Math.min(...main_children.map(id => state[id].left))
-      const right = Math.max(...main_children.map(id => state[id].right))
+      const main_children = new Set(
+        s.main_children ||
+        groups[0].ids
+      )
 
-      // be above everything from where I begin to where I end
-      const my_reach = utils.drop_while_both_ends(active_below, e => !e.mine)
-      const tops = state[s.id].text_height + Math.max(...my_reach.map(e => e.top))
+      const reach = utils.drop_while_both_ends(active_below, e => !e.mine)
 
-      const y = tops + gap_y
-      const me = state[s.id] = {
-        ...state[s.id],
-        left,
-        right,
-        mid: (left_mid + right_mid) / 2,
-        y,
-        top: y + state[s.id].text_height,
+      const flabelled_children =
+        children.map(id => ({
+          id,
+          node: state[id],
+          flabel: spec_by_id[id].flabel || zero,
+        }))
+
+      const [main, other] = utils.partition(
+        flabelled_children,
+        child => main_children.has(child.id)
+      )
+
+      state[s.id] = {
+        ...graphics.nonterminal(
+          s.label,
+          main,
+          other,
+          reach),
         parent_placed: !has_parent.has(s.id),
       }
-      children.forEach(id => {
-        state[id].parent_placed = true
-        state[id].parent_top = me.y - me.text_height
-      })
-      hline(me.y - gap_y / 2, leftmost_mid, rightmost_mid + line_width)
-      vline(me.mid, me.y - gap_y / 2 + line_width, me.y)
-      children.forEach(id => {
-        vline(state[id].mid, state[id].top, me.y - gap_y / 2 - me.text_height)
-        vline(state[id].mid, me.y - gap_y, me.y - gap_y / 2)
-      })
+
+      children.forEach(id => state[id].parent_placed = true)
     }
   })
-
-  const w = Math.max(...Object.values(state).map(s => s.right))
-  const h = 20 + Math.max(...Object.values(state).map(s => s.top > 0 ? s.top : 0))
 
   page.push(
     domdiff.pre(msgs.join('\n'), css`font-size: 12px`),
@@ -221,50 +372,34 @@ const G = (name: string | number, ...spec0: Node[]) => {
           overflow: auto;
         }
       `,
+      graphics.draw(),
       domdiff.pre(
         name + '', '\n',
         pretty({
-          spec,
+          // spec // : utils.topo(spec0),
           // state, w, h
         }),
         css`font-size: 17px`
       ),
-      div(
-        css`position: relative; order: -1; margin: 40px`,
-        style`width: ${w}px;`,
-        style`height: ${h}px;`,
-        ...utils.mapObject(state, (_id, s) =>
-          div(
-            css`position: absolute`,
-            css`white-space: nowrap`,
-            style`left: ${s.mid - s.text_width / 2}px;`,
-            style`bottom: ${s.y}px;`,
-            {attr: 'note', value: pretty(s)},
-            s.label,
-          )
-        ),
-        ...utils.mapObject(state, (_id, s) =>
-          div(
-            css`position: absolute`,
-            css`white-space: nowrap`,
-            style`left: ${s.mid}px;`,
-            style`bottom: ${s.parent_top}px;`,
-            css`transform: translate(-50%, 50%); `,
-            s.flabel,
-          )
-        ),
-        ...lines,
-      )
     )
   )
 }
 
-const base = (s: string) => utils.words(s).map(id => ({id}))
-const nodes = (o: Record<string, string>) => utils.mapObject(o, (id, children) => ({id, children: utils.words(children)}))
+const base = (s: string) => utils.words(s).map(id => ({id, label:id}))
+const nodes =
+  (o: Record<string, string>) =>
+  utils.mapObject(o, (id, children) => ({id, label: id, children: utils.words(children)}))
 
 const H = (...spec) =>
-  // G(pretty(spec), ...spec)
-  undefined
+  G(pretty(spec), ...spec)
+
+// dependency tree
+H(...base('dit vill jag åka'),
+  {id: 'SB', label: '', flabel: 'SB', main_children: ['jag'], children: utils.words('jag')},
+  {id: 'RA', label: '', flabel: 'RA', main_children: ['dit'], children: utils.words('dit')},
+  {id: 'OO', label: '', flabel: 'OO', main_children: ['åka'], children: utils.words('åka RA')},
+  {id: 'RT', label: 'RT', flabel: '', main_children: ['vill'], children: utils.words('SB vill OO')},
+)
 
 H(...base('igår ville jag åka dit'),
   ...nodes({
@@ -386,10 +521,6 @@ H(...base('a b c d e f & h g'),
     'S₂': 'S & HG',
   }))
 
-console.time()
-import {default as romaner} from './romaner.js'
-console.log(romaner.length)
-
 G(112,
     {id: "1002", label: "Men"},
     {id: "1003", label: "vad"},
@@ -397,7 +528,7 @@ G(112,
     {id: "1005", label: "jag"},
     {id: "1007", label: "ta"},
     {id: "1008", label: "mej"},
-    {id: "1009", label: "till"},
+    {id: "1009", label: "till", flabel: "HD"},
     {id: "1010", label: "?"},
     {id: "1", label: "VBM", children: ["1007"]},
     {id: "4", label: "PP", children: ["1003", "1009"]},
@@ -451,16 +582,20 @@ G(110,
 )
 
 
-{
+function xmlToSpec(romaner: string) {
     const p = new DOMParser()
+    console.time('parse')
     const xml = p.parseFromString(romaner, 'text/xml')
+    console.timeEnd('parse')
+    console.time('specs')
+    const specs = []
     const err = xml.querySelector('parsererror')
     if (xml && !err) {
       const sents = xml.querySelectorAll('s')
       const $ = (base: Element, q: string) => Array.from(base.querySelectorAll(q))
       let found = 0
       for (let i = 0; i < 1000; ++i) {
-        const spec = {} as Record<string, Node>
+        const spec = {} as Record<string, SpecEntry>
         const s = sents[i]
         const no_secedge = $(s, 'secedge').length == 0
         const no_discont = $(s, '[discontinuous="true"]').length == 0
@@ -500,35 +635,33 @@ G(110,
           }
         })
         Object.entries(flabels).forEach(([id, flabel]) => {
-          console.log(spec, id, flabel)
+          // console.log(spec, id, flabel)
           spec[id].flabel = flabel
         })
-        const spec_rec = spec
-        {
-          const spec = Object.values(spec_rec)
-          G(
-            i
-            + '\n' + found
-            // + '\n' + (new XMLSerializer().serializeToString(s))
-          ,
-            ...spec
-          )
-        }
-
-        // page.push(
-        //   domdiff.pre(
-        //     css`font-size: 12px`,
-        //     pretty({i, spec}),
-        //     '\n',
-        //     new XMLSerializer().serializeToString(s)))
+        specs.push({
+          name: `
+            ${i}
+            ${found}
+          `,
+            // ${new XMLSerializer().serializeToString(s)}
+          spec: Object.values(spec)
+        })
       }
     }
+    console.timeEnd('specs')
+    return specs
 }
-console.timeEnd()
 
+import {default as romaner} from './romaner.js'
+console.log(romaner.length)
 
-console.time()
+const specs = xmlToSpec(romaner)
+console.time('G')
+specs.forEach(({name, spec}) => G(name, ...spec))
+console.timeEnd('G')
+
+console.time('diff')
 body(sheet(), ...page)(document.body)
-console.timeEnd()
+console.timeEnd('diff')
 
 
