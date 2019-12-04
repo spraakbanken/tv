@@ -1,5 +1,12 @@
 import {test, test_eval} from "./test.ts"
 
+export function maybe<A, B>(x?: A, z: B, f: (a: A) => B): B {
+  return x === undefined ? z : f(x)
+}
+
+test(maybe, undefined, -1, x => x + ' ok').is = -1
+test(maybe, 'seems', -1, x => x + ' ok').is = 'seems ok'
+
 export function nub<A>(xs: A[]): A[] {
   const seen = new Set<A>()
   return xs.filter(x => {
@@ -9,9 +16,11 @@ export function nub<A>(xs: A[]): A[] {
   })
 }
 
-test(nub, [1, 2, 3, 3]).is = [1, 2, 3]
+test(nub, [1, 2, 2, 3, 4, 3, 1]).is = [1, 2, 3, 4]
 
-export const words = (s: string) => s.trim().split(/\s+/g)
+export function words(s: string): string[] {
+  return s.trim().split(/\s+/g)
+}
 
 test(words, ' apa bepa cepa ').is = ['apa', 'bepa', 'cepa']
 
@@ -48,7 +57,7 @@ export function mapEntries<K extends string, A, B>
   return Object.fromEntries(mapObject(obj, (k, v, i) => [k, f(k, v, i)])) as any
 }
 
-export const range = (from: number, to: number) => {
+export function range(from: number, to: number) {
   const out = []
   for (let i = from; i <= to; ++i) {
     out.push(i)
@@ -72,19 +81,18 @@ test(show_table, [['apa', '1'], ['2', 'bepa']]).is =
   'apa    1' + '\n' +
   '  2 bepa'
 
-export const lines = xs => xs[0].trim().split(/\n/mg).map(words)
+export function lines(xs: TemplateStringsArray) {
+  return xs[0].trim().split(/\n/mg).map(words)
+}
 
-export function perms(xs) {
+export function perms<A>(xs: A[]): A[][] {
   if (xs.length == 0) {
     return [[]]
   } else {
-    const out = []
-    perms(xs.slice(1)).forEach(ys => {
-      range(0, ys.length).forEach(i => {
-        out.push([...ys.slice(0, i), xs[0], ...ys.slice(i)])
-      })
-    })
-    return out
+    return perms(xs.slice(1))
+      .flatMap(ys =>
+        range(0, ys.length)
+          .map(i => [...ys.slice(0, i), xs[0], ...ys.slice(i)]))
   }
 }
 
@@ -92,11 +100,11 @@ test(perms, [1, 2]).is = [[1, 2], [2, 1]]
 
 test(() => perms([1, 2, 3]).length).is = 6
 
-export function toposort<A extends {id: Id, children?: Id[]}>(spec: A[]): A[] {
-  const placed = {}
-  const queue = {}
-  const out = []
-  function place(e) {
+export function toposort<A extends {id: string, children?: string[]}>(spec: A[]): A[] {
+  const placed: Record<string, boolean> = {}
+  const queue: Record<string, A[]> = {}
+  const out: A[] = []
+  function place(e: A) {
     for (const ch of e.children || []) {
       if (!placed[ch]) {
         queue[ch] = [...(queue[ch] || []), e]
@@ -172,3 +180,9 @@ export function by<T extends Record<string, any>>(k: keyof T, xs: T[]): Record<s
   const b = {id: 'b', w: 2}
   test(by, 'id', [a, b]).is = {a, b}
 }
+
+export function sum(xs: number[]): number {
+  return xs.reduce((a, b) => a + b, 0)
+}
+
+test(sum, [1, 2, 30]).is = 33
