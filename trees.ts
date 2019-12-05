@@ -404,6 +404,8 @@ function Graphics(
       children.push(hline(h.height, mids[h.left], mids[h.right]))
     })
 
+    height += 15 // for height of horizontal scrollbar
+
     return div(
       css`position: relative`,
       px({width, height}),
@@ -414,7 +416,7 @@ function Graphics(
   return {terminal, label, nonterminal, seal, draw}
 }
 
-const try_span = (s?: string) => s ? span(s) : span(px({height: 0, width: 0}))
+const try_span = (s?: string) => s ? span(style`white-space: pre; display: inline-block;`, s) : span(px({height: 0, width: 0}))
 
 function measure_spec(measure_root: Element, spec: Spec<string | undefined>): Spec<DiffWithRect> {
 
@@ -739,6 +741,11 @@ if (true) {
       S: 'a b WIDE d',
     }))
 
+  H(...base('a b e d c'),
+    ...nodes({
+      WIDE: 'c e',
+      S: 'a b WIDE d',
+    }))
 
   H(...base('a b c d e f'),
     ...nodes({
@@ -834,10 +841,18 @@ G('europarl',
     {"id": '2', "label": "åtminstone", "flabel": "MD"},
     {"id": '3', "label": "jag", "flabel": "SB"},
     {"id": '4', "label": "personligen", "flabel": "HD"},
+    {"id": '5', "label": "helt", "flabel": "KL"},
+    {"id": '6', "label": "och", "flabel": "PH"},
+    {"id": '7', "label": "hållet", "flabel": "KL"},
+    {"id": '8', "label": "instämma", "flabel": "HD"},
+    {"id": '9', "label": "i", "flabel": "HD"},
+    {"id": '10', "label": "."},
+    {"id": '12', "label": "S", "children": ['15', '1', '14', '3']},
+    {"id": '13', "label": "PP", "children": ['0', '9'], "flabel": "MD"},
     {"id": '14', "label": "AbP", "children": ['2', '4'], "flabel": "MD"},
-    {"id": '15', "label": "VP", "children": ['0', '1', '3', '14'], "flabel": "IV"}
+    {"id": '11', "label": "KoP", "children": ['5', '6', '7'], "flabel": "MD"},
+    {"id": '15', "label": "VP", "children": ['13', '11', '8'], "flabel": "IV"}
 )
-
 
 G('europarl',
     {"id": '0', "label": "Detta", "flabel": "OO"},
@@ -846,7 +861,6 @@ G('europarl',
     {"id": '3', "label": "jag", "flabel": "SB"},
     {"id": '4', "label": "personligen", "flabel": "HD"},
     {"id": '5', "label": "helt", "flabel": "KL"},
-    {"id": '5.5', "label": ",", "flabel": "PH"},
     {"id": '6', "label": "och", "flabel": "PH"},
     {"id": '7', "label": "hållet", "flabel": "KL"},
     {"id": '8', "label": "instämma", "flabel": "HD"},
@@ -859,8 +873,7 @@ G('europarl',
     {"id": '15', "label": "VP", "children": ['13', '11', '8'], "flabel": "IV"}
 )
 
-// note: it's the PP being early that makes the problems
-G('europarl-bug',
+G('europarl',
     {"id": '0', "label": "Detta", "flabel": "OO"},
     {"id": '1', "label": "kan", "flabel": "HD"},
     {"id": '2', "label": "åtminstone", "flabel": "MD"},
@@ -872,11 +885,101 @@ G('europarl-bug',
     {"id": '8', "label": "instämma", "flabel": "HD"},
     {"id": '9', "label": "i", "flabel": "HD"},
     {"id": '10', "label": "."},
+    {"id": '14', "label": "AbP", "children": ['2', '4'], "flabel": "MD"},
     {"id": '12', "label": "S", "children": ['15', '1', '14', '3']},
     {"id": '13', "label": "PP", "children": ['0', '9'], "flabel": "MD"},
-    {"id": '14', "label": "AbP", "children": ['2', '4'], "flabel": "MD"},
     {"id": '11', "label": "KoP", "children": ['5', '6', '7'], "flabel": "MD"},
     {"id": '15', "label": "VP", "children": ['13', '11', '8'], "flabel": "IV"}
+)
+
+G('europarl',
+    {"id": '0', "label": "Detta", "flabel": "OO"},
+    {"id": '1', "label": "kan", "flabel": "HD"},
+    {"id": '2', "label": "åtminstone", "flabel": "MD"},
+    {"id": '3', "label": "jag", "flabel": "SB"},
+    {"id": '4', "label": "personligen", "flabel": "HD"},
+    {"id": '5', "label": "helt", "flabel": "KL"},
+    {"id": '6', "label": "och", "flabel": "PH"},
+    {"id": '7', "label": "hållet", "flabel": "KL"},
+    {"id": '8', "label": "instämma", "flabel": "HD"},
+    {"id": '9', "label": "i", "flabel": "HD"},
+    {"id": '10', "label": "."},
+    {"id": '14', "label": "AbP", "children": ['2', '4'], "flabel": "MD"},
+    {"id": '12', "label": "S", "children": ['15', '1', '14', '3']},
+    {"id": '11', "label": "KoP", "children": ['5', '6', '7'], "flabel": "MD"},
+    {"id": '13', "label": "PP", "children": ['0', '9'], "flabel": "MD"},
+    {"id": '15', "label": "VP", "children": ['13', '11', '8'], "flabel": "IV"}
+)
+
+G('europarl-TV',
+/*
+  {"id": 0, "label": "Först", "flabel": "MD"},
+  {"id": 1, "label": "skulle", "flabel": "HD"},
+  {"id": 2, "label": "jag", "flabel": "SB"},
+  {"id": 3, "label": "vilja", "flabel": "HD"},
+  {"id": 4, "label": "ge", "flabel": "HD"},
+  {"id": 5, "label": "er", "flabel": "IO"},
+  {"id": 6, "label": "en", "flabel": "DT"},
+  {"id": 7, "label": "komplimang", "flabel": "HD"},
+  {"id": 8, "label": "för", "flabel": "HD"},
+  {"id": 9, "label": "det", "flabel": "DT"},
+  {"id": 10, "label": "faktum", "flabel": "HD"},
+  {"id": 11, "label": "att", "flabel": "HD"},
+  {"id": 12, "label": "ni", "flabel": "SB"},
+  {"id": 13, "label": "hållit", "flabel": "ME"},
+  {"id": 14, "label": "ert", "flabel": "DT"},
+  {"id": 15, "label": "ord", "flabel": "HD"},
+  {"id": 16, "label": "och", "flabel": "PH"},
+  {"id": 17, "label": "att", "flabel": "HD"},
+    */
+  {"id": 18, "label": "det", "flabel": "SB"},
+  {"id": 19, "label": "nu", "flabel": "HD"},
+  {"id": 20, "label": ","},
+  {"id": 21, "label": "under", "flabel": "HD"},
+  {"id": 22, "label": "det", "flabel": "DT"},
+  {"id": 23, "label": "nya", "flabel": "MD"},
+  {"id": 24, "label": "årets", "flabel": "HD"},
+  {"id": 25, "label": "första", "flabel": "MD"},
+  {"id": 26, "label": "sammanträdesperiod", "flabel": "HD"},
+  {"id": 27, "label": ","},
+  {"id": 28, "label": "faktiskt", "flabel": "MD"},
+  {"id": 29, "label": "har", "flabel": "HD"},
+  {"id": 30, "label": "skett", "flabel": "HD"},
+  {"id": 31, "label": "en", "flabel": "DT"},
+  {"id": 32, "label": "kraftig", "flabel": "MD"},
+  {"id": 33, "label": "utökning", "flabel": "HD"},
+  {"id": 34, "label": "av", "flabel": "HD"},
+  {"id": 35, "label": "antalet", "flabel": "HD"},
+  {"id": 36, "label": "TV-kanaler", "flabel": "HD"},
+  {"id": 37, "label": "på", "flabel": "HD"},
+  {"id": 38, "label": "våra", "flabel": "DT"},
+  {"id": 39, "label": "rum", "flabel": "HD"},
+  {"id": 40, "label": "."},
+  {"id": 41, "label": "NP", "children": [38, 39], "flabel": "OO"},
+  {"id": 42, "label": "PP", "children": [37, 41], "flabel": "MD"},
+  {"id": 43, "label": "NP", "children": [35, 63], "flabel": "OO"},
+  {"id": 44, "label": "PP", "children": [34, 43], "flabel": "MD"},
+  {"id": 45, "label": "NP", "children": [31, 32, 33, 44], "flabel": "ES"},
+  {"id": 46, "label": "VP", "children": [30, 45], "flabel": "IV"},
+  {"id": 47, "label": "NP", "children": [22, 23, 24], "flabel": "DT"},
+  {"id": 48, "label": "NP", "children": [47, 25, 26], "flabel": "OO"},
+  {"id": 49, "label": "PP", "children": [21, 48], "flabel": "AN"},
+  {"id": 50, "label": "S", "children": [18, 65, 28, 29, 46], "flabel": "OO"},
+  {"id": 51, "label": "SuP", "children": [17, 50], "flabel": "KL"},
+  {"id": 52, "label": "NP", "children": [14, 15], "flabel": "OO"},
+  {"id": 53, "label": "S", "children": [12, 62], "flabel": "OO"},
+  {"id": 54, "label": "SuP", "children": [11, 53], "flabel": "KL"},
+  {"id": 55, "label": "KoP", "children": [54, 16, 51], "flabel": "MD"},
+  {"id": 56, "label": "NP", "children": [9, 10, 55], "flabel": "OO"},
+  {"id": 57, "label": "PP", "children": [8, 56], "flabel": "MD"},
+  {"id": 58, "label": "NP", "children": [6, 7, 57], "flabel": "OO"},
+  {"id": 59, "label": "VP", "children": [4, 5, 58], "flabel": "IV"},
+  {"id": 60, "label": "VP", "children": [3, 59], "flabel": "IV"},
+  {"id": 61, "label": "S", "children": [0, 1, 2, 60]},
+  {"id": 62, "label": "VP", "children": [64, 52], "flabel": "IV"},
+  {"id": 63, "label": "NP", "children": [36, 42], "flabel": "MD"},
+  {"id": 64, "label": "VBM", "children": [13], "flabel": "HD"},
+  {"id": 65, "label": "AbP", "children": [19, 49], "flabel": "MD"}
 )
 
 function xmlToSpec(romaner: string) {
@@ -897,9 +1000,9 @@ function xmlToSpec(romaner: string) {
         const no_secedge = $(s, 'secedge').length == 0
         const no_discont = $(s, '[discontinuous="true"]').length == 0
         const long_sent = $(s, 't').length > 12
-        if ((no_discont) || long_sent) {
-          continue
-        }
+        // if ((no_discont) || long_sent) {
+        //   continue
+        // }
         if (found++ > 100) {
           break
         }
@@ -947,12 +1050,12 @@ function xmlToSpec(romaner: string) {
     return specs
 }
 
-import {default as romaner} from './europarl.js'
-console.log(romaner.length)
-const specs = xmlToSpec(romaner)
-console.time('G')
-specs.forEach(({name, spec}) => G(name, ...spec))
-console.timeEnd('G')
+// import {default as romaner} from './europarl.js'
+// console.log(romaner.length)
+// const specs = xmlToSpec(romaner)
+// console.time('G')
+// specs.forEach(({name, spec}) => G(name, ...spec))
+// console.timeEnd('G')
 
 console.time('diff')
 body(sheet(), ...page)(document.body)
