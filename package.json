@@ -10,6 +10,7 @@
     "typescript": "^3.6.3"
   },
   "dependencies": {
-    "json-stringify-pretty-compact": "^2.0.0"
+    "json-stringify-pretty-compact": "^2.0.0",
+    "tinyqueue": "^2.0.3"
   }
 }

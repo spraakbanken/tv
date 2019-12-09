@@ -1,5 +1,7 @@
 import * as domdiff from "./domdiff.js"
-import {default as pretty} from "json-stringify-pretty-compact"
+import pretty from "json-stringify-pretty-compact"
+
+import TinyQueue from "tinyqueue"
 
 import {test} from "./test"
 
@@ -8,8 +10,18 @@ import * as utils from "./utils"
 declare const module: {hot?: {accept: Function}}
 module.hot && module.hot.accept()
 
-const {body, div, style, span} = domdiff
+const {body, div, style, span, pre} = domdiff
 const {css, sheet} = domdiff.class_cache()
+
+const svg = domdiff.MakeTag('svg')
+const upside_up = css`
+  & { transform: scaleY(-1) }
+  & text { transform: scaleY(-1) }
+`
+const text = domdiff.MakeTag('text')
+const path = domdiff.MakeTag('path')
+const g = domdiff.MakeTag('g')
+const d = domdiff.MakeAttr('d')
 
 css`
   body {
@@ -40,14 +52,17 @@ interface SpecEntry<A> {
   flabel?: A,
 }
 
+
 type Diff = (e?: Element) => Element
+
+interface Rect {
+  width: number
+  height: number
+}
 
 interface DiffWithRect {
   diff: Diff
-  rect: {
-    width: number,
-    height: number
-  }
+  rect: Rect,
   from_source?: string
 }
 
@@ -57,11 +72,184 @@ const zero: DiffWithRect = {
   rect: zero_rect,
 }
 
-interface node {
-  left: number
-  right: number
-  mid: number
-  top: number
+interface Box {
+  x1: number
+  y1: number
+  x2: number
+  y2: number
+}
+
+type Line = VLine | HLine
+
+interface VLine {
+  tag: 'V'
+  x: number,
+  top: number,
+  bottom: number,
+}
+
+interface HLine {
+  tag: 'H'
+  y: number,
+  left: number,
+  right: number,
+}
+
+function flip_to_vline(v: HLine): VLine {
+  return {
+    tag: 'V',
+    x: v.y,
+    bottom: v.left,
+    top: v.right,
+  }
+}
+
+function flip_point(p: Point): Point {
+  return {x: p.y, y: p.x}
+}
+
+function offset_rect(r: Rect, dx: number, dy: number): Box {
+  return {
+    x1: dx,
+    y1: dy,
+    x2: dx + r.width,
+    y2: dy + r.height,
+  }
+}
+
+interface Point {
+  x: number,
+  y: number
+}
+
+function points_of_box(b: Box): Point[] {
+  const {x1, y1, x2, y2} = b
+  return [
+    {x: x1, y: y1},
+    {x: x1, y: y2},
+    {x: x2, y: y2},
+    {x: x2, y: y1},
+  ]
+}
+
+function lines_of_box(b: Box): Line[] {
+  const {x1, y1, x2, y2} = b
+  const left  = Math.min(x1, x2),
+  const right = Math.max(x1, x2),
+  const bottom= Math.min(y1, y2),
+  const top   = Math.max(y1, y2),
+  return [
+    {tag: 'V', top, bottom, x: left}
+    {tag: 'V', top, bottom, x: right}
+    {tag: 'H', left, right, y: top}
+    {tag: 'H', left, right, y: bottom}
+  ]
+}
+
+function slope(l: Line): {k: number, m: number} | 'vertical' {
+  const {x1, y1, x2, y2} = l
+  if (dx === 0) {
+    return 'vertical'
+  } else {
+    const k = dy / dx
+    return {
+      k,
+      m: k * x1 - y1
+    }
+  }
+}
+
+function intersect(p: Point, q: Point, v: Line) {
+  if (v.tag == 'H') {
+    return intersect(
+      flip_point(p),
+      flip_point(q),
+      flip_to_vline(v),
+    )
+  }
+  const dx = p.x - q.x
+  const dy = p.y - q.y
+  if (dx === 0) {
+    return false
+    // const bottom = Math.min(p.y, q.y)
+    // const top = Math.max(p.y, q.y)
+    // return v.x === p.x && !(bottom < v.top || top > v.bottom)
+  }
+  const left = Math.min(p.x, q.x)
+  const right = Math.max(p.x, q.x)
+  if (v.x > right || v.x < left) {
+    return false
+  }
+  const k = dy / dx
+  const m = p.y - k * p.x
+  const y = k * v.x + m
+  return v.bottom < y && y < v.top
+}
+
+
+function visible(p: Point, points: Point[], lines: Line[]): Point[] {
+  return points.filter(q => lines.every(l => !intersect(p, q, l)))
+}
+
+function distance(p: Point, q: Point) {
+  const sq = (x: number) => x * x
+  return Math.sqrt(sq(p.x - q.x) + sq(p.y - q.y))
+}
+
+interface Backs<A> {
+  back: Back<A>
+  head: A
+}
+
+type Back<A> = Backs<A> | null
+
+function unroll<A>(back: Back<A>): A[] {
+  const out = []
+  while (back !== null) {
+    out.push(back.head)
+    back = back.back
+  }
+  out.reverse()
+  return out
+}
+
+function scale(b: Box, rx: number, ry: number) {
+  const xm = (b.x1 + b.x2) / 2
+  const ym = (b.y1 + b.y2) / 2
+  const w = Math.abs(b.x1 - b.x2)
+  const h = Math.abs(b.y1 - b.y2)
+  return {
+    x1: xm - w * rx / 2,
+    x2: xm + w * rx / 2,
+    y1: ym - h * ry / 2,
+    y2: ym + h * ry / 2,
+  }
+}
+
+function euclidean_shortest_path(source: Point, target: Point, boxes: Box[]) {
+  const str = (p: Point) => `${p.x},${p.y}`
+  const points = [target, ...boxes.flatMap(points_of_box)]
+  const lines = [
+    ...boxes.map(b => scale(b, 0.999, 0.998)).flatMap(lines_of_box),
+    // ^ scale down a bit (and asymmetrically) because line collisions are not stable
+  ]
+  const queue = new TinyQueue([{point: source, dist: 0, back: {back: null as Back<Point>, head: source}}], (a, b) => a.dist - b.dist)
+  const visited = {} as Record<string, true>
+  while (queue.length > 0) {
+    const popped = queue.pop()
+    if (popped === undefined) break
+    const {point, dist, back} = popped
+    if (str(point) === str(target)) {
+      return {dist, path: unroll(back)}
+    }
+    if (visited[str(point)]) continue
+    visited[str(point)] = true
+    visible(point, points, lines).forEach(q => {
+      if (visited[str(q)]) return
+      queue.push({point: q, dist: dist + distance(point, q), back: {back, head: q}})
+    })
+  }
+  return null
 }
 
 function px(d: Record<string, number>): any {
@@ -81,9 +269,10 @@ const default_options = {
 type id = string
 
 type Content = Readonly<
-  | {tag: 'diff', diff: Diff[], x?: number, y?: number}
+  | {tag: 'diff', diff: Diff, rect?: Rect, x?: number, y?: number}
   | {tag: 'block', block: Block, x?: number, y?: number}
   | {tag: 'hline', left: id, right: id, height: number}
+  | {tag: 'vline', x: number, bottom: number, top: number}
 >
 
 
@@ -109,44 +298,6 @@ function Graphics(
   let row: Block[] = []
   const blocks: Record<id, Block> = {}
 
-  const hline = (bottom: number, left: number, right: number) =>
-    div(
-      css`position: absolute`,
-      css`background: black`,
-      px({
-        left,
-        width: right - left,
-        bottom,
-        height: opts.line_width
-      }),
-      style`z-index: 1;`,
-    )
-
-  const vline = (x: number, bottom: number, top: number) => [
-    div(
-      css`position: absolute`,
-      css`background: white`,
-      px({
-        left: x - opts.line_gap / 2,
-        width: opts.line_width + opts.line_gap,
-        bottom,
-        height: top - bottom,
-      }),
-      style`z-index: 2;`,
-    ),
-    div(
-      css`position: absolute`,
-      css`background: black`,
-      px({
-        left: x,
-        width: opts.line_width,
-        bottom,
-        height: top - bottom,
-      }),
-      style`z-index: 3;`,
-    )
-  ]
-
   function terminal(element: DiffWithRect): id {
     const id = next_id()
     const block: Block = {
@@ -157,7 +308,8 @@ function Graphics(
       min_height: element.rect.height,
       contents: [{
         tag: 'diff',
-        diff: [element.diff]
+        diff: element.diff,
+        rect: element.rect
       }],
     }
     row.push(block)
@@ -195,8 +347,8 @@ function Graphics(
       top,
       min_height: top,
       contents: [
-        {tag: 'diff', diff: [element.diff], x: label_x, y: child_block.top + line_height},
-        {tag: 'diff', diff: vline(mid, 0, line_height), y: child_block.top},
+        {tag: 'diff', diff: element.diff, rect: element.rect, x: label_x, y: child_block.top + line_height},
+        {tag: 'vline', x: mid, bottom: child_block.top, top: line_height + child_block.top},
         {tag: 'block', block: child_block, x: child_x},
       ],
     }
@@ -255,8 +407,10 @@ function Graphics(
       const old_top = block.top
       block.top = block.min_height
       block.contents.push({
-        tag: 'diff',
-        diff: vline(block.mid, old_top, block.top)
+        tag: 'vline',
+        x: block.mid,
+        bottom: old_top,
+        top: block.top,
       })
     })
 
@@ -357,8 +511,26 @@ function Graphics(
     }
   }
 
+  const white = css`stroke:#fff; stroke-width: ${opts.line_gap}px`
+  const black = css`stroke:#000; stroke-width: ${opts.line_width}px`
+  const p = (x1: number, y1: number, x2: number, y2: number, ...cls: Diff[]) =>
+    y1 <= y2 && path(
+      d`M${Math.round(x1)} ${Math.round(y1)} L${Math.round(x2)} ${Math.round(y2)}`,
+      ...cls
+    ),
+
+  const hline = (bottom: number, left: number, right: number) =>
+    p(left - 1, bottom, right + 1, bottom, black)
+
+  const vline = (x: number, bottom: number, top: number) => g(
+    p(x, bottom+opts.line_width / 2, x, top-opts.line_width / 2, white)
+    p(x, bottom, x, top, black)
+  )
+
   function draw() {
-    const children = []
+    const boxes: Box[] = []
+    const children: Diff[] = []
+    const svg_children: Diff[] = []
 
     const mids: Record<string, number> = {}
     const hlines: {left: id, right: id, height: number}[] = []
@@ -370,18 +542,23 @@ function Graphics(
       height = Math.max(height, y + block.top)
       mids[block.id] = x + block.mid
       block.contents.forEach((c: Content) => {
-        const dx = x + (c.tag == 'hline' ? 0 : c.x || 0)
-        const dy = y + (c.tag == 'hline' ? 0 : c.y || 0)
         if (c.tag == 'block') {
+          const dx = x + (c.x || 0)
+          const dy = y + (c.y || 0)
           rec(c.block, dx, dy)
         } else if (c.tag == 'diff') {
+          const dx = x + (c.x || 0)
+          const dy = y + (c.y || 0)
           children.push(
             div(
               css`position: absolute`,
               px({left: dx, bottom: dy}),
-              ...c.diff
+              c.diff
             )
           )
+          c.rect && c.rect.width && dy > 0 && boxes.push(offset_rect(c.rect, dx, dy))
+        } else if (c.tag == 'vline') {
+          svg_children.push(vline(c.x + x, c.bottom + y, c.top + y))
         } else if (c.tag == 'hline') {
           hlines.push({
             left: c.left,
@@ -400,16 +577,77 @@ function Graphics(
       })
     }
 
+    height += 15 // for height of horizontal scrollbar
+
+    width = Math.round(width)
+    height = Math.round(height)
+
     hlines.forEach(h => {
-      children.push(hline(h.height, mids[h.left], mids[h.right]))
+      svg_children.push(
+        hline(h.height, mids[h.left], mids[h.right]))
+
+      const rect = {
+        height: 3,
+        width: mids[h.right] - mids[h.left]
+      }
+      boxes.push(offset_rect(rect, mids[h.left], h.height - 5))
     })
 
-    height += 15 // for height of horizontal scrollbar
+    svg_children.reverse()
+
+    const str = p => `${p.x},${p.y}`
+
+    boxes.map(b => scale(b, 1.2, 1.1)).forEach(b => {
+      svg_children.push(
+        path(
+          d('M' + points_of_box(b).map(str).join(' L')),
+          css`stroke: blue; stroke-width: 2px; fill: none`
+        )
+      )
+    })
+
+    let source = {x: 33, y: 20}
+    let target = {x: 128, y: 128}
+    // for (let count = 7; count < 11; ++count) {
+    for (let count = 22; count < 27; ++count) {
+
+      const i = (33 * count + 17) % boxes.length // Math.floor(Math.random() * boxes.length)
+      const j = (37 * count + 19) % boxes.length // Math.floor(Math.random() * boxes.length)
+      source = {
+        x: (boxes[i].x1 + boxes[i].x2) / 2,
+        y: boxes[i].y1 - 2,
+      }
+
+      target = {
+        x: (boxes[j].x1 + boxes[j].x2) / 2,
+        y: boxes[j].y2 + 2,
+      }
+
+      const esp = euclidean_shortest_path(source, target, boxes.map(b => scale(b, 1.1, 0.95))
+
+      esp && esp.path.length > 2 && svg_children.push(
+        path(
+          d('M' + esp.path.map(str).join(' L')),
+          css`stroke: red; stroke-width: 2px; fill: none`
+        )
+      )
+
+      console.log(esp)
+
+      ;[source, target] = [0, 1].map(_ => ({x: Math.random() * width, y: Math.random() * height}))
+    }
+
+    const svg_lines = svg(
+      upside_up,
+      css`position: absolute`,
+      px({width, height, bottom: 0, left: 0}),
+      ...svg_children)
 
     return div(
       css`position: relative`,
       px({width, height}),
-      ...children
+      ...children,
+      svg_lines,
     )
   }
 
@@ -497,7 +735,7 @@ const G = (name: string | number, ...spec0: Spec<string | undefined>) => {
   })
 
   page.push(
-    domdiff.pre(msgs.join('\n'), css`font-size: 12px`),
+    pre(msgs.join('\n'), css`font-size: 12px`),
     div(
       css`
         display: flex;
@@ -510,7 +748,7 @@ const G = (name: string | number, ...spec0: Spec<string | undefined>) => {
         }
       `,
       graphics.draw(),
-      domdiff.pre(
+      pre(
         css`display: none`,
         name + '', '\n',
         pretty({
@@ -550,87 +788,6 @@ function renumber(obj) {
   })
 }
 
-
-/*
-function layout() {
-  seq = []
-
-  spec.forEach(s => {
-    if (!s.mid) {
-      s.mid = s.width / 2
-    }
-  })
-
-
-  // put side by side can be done either just with bounding boxes or
-  // more ambitiously by using their bounding polygon
-
-  // requires: topologically sorted spec
-  spec.forEach(s => {
-
-    if (is_terminal(s)) {
-
-      seq.push({
-        id: s.id,
-        orphan: !has_parent(s.id),
-        height: s.height
-        left: -s.mid
-        right: s.width - s.mid
-      })
-
-    } else {
-
-      // figure out which ones are main_children
-      // this can be done by looking for HD or widest children somehow
-
-      const pre_label_height = max(
-        height of main_children,
-        height of all other children,
-        height of intermediate trees
-      )
-
-      non_main_children.forEach(orphan)
-
-      const height = pre_label_height + self_label_height
-
-      // put all main children next to each other (coord transform) and self on top
-      // also remove them from seq and put yourself there
-
-      // set the heights now. every interemediate thing must get their height updated
-      // or they might grow underneath us and collide (!!!)
-
-      // flabels:
-      // we can just hard-code that children may include a top aligned thing (functional label)
-
-      // seclabels... these... hmm... need to be in the children order somehow.
-      // but this should be able to be determined statically ...
-      // hmm umm not really because their parent label is not positioned yet (!!!)
-      // some kind of heuristic is needed
-
-    }
-
-    // merge orphans
-    let done = false
-    while (!done) {
-      done = true
-      for (let i = 0; i < seq.length - 1; ++i) {
-        if (seq[i].orphan && seq[i].height <= seq[i+1].height) {
-          // merge seq[i] into seq[i+1]
-          // by putting seq[i] before seq[i+1]
-          done = false
-        }
-      }
-    }
-  })
-}
-*/
-
-
-
-
-
-
-
 const base = (s: string) => utils.words(s).map(id => ({id, label:id}))
 const nodes =
   (o: Record<string, string>) =>
@@ -648,6 +805,8 @@ if (true) {
     {id: 'OO', label: '', flabel: 'OO', only: 'åka', children: utils.words('åka RA')},
     {id: 'RT', label: 'RT', flabel: '', only: 'vill', children: utils.words('SB vill OO')},
   )
+
+  break boo
 
   H(...base('jag ville åka dit igår'),
     ...nodes({
@@ -696,6 +855,8 @@ if (true) {
       VP: 'IP2? ville',
       'S?': 'jag VP',
     }))
+
+  // break boo
 
   H(...base('igår ville jag åka dit'),
     ...nodes({
@@ -833,154 +994,154 @@ if (true) {
       {"id": "10", "label": "PEM", "children": ["1001", "1004"]},
       {"id": "2", "label": "PP", "children": ["10", "1"]}
   )
+
+  G('europarl',
+      {"id": '0', "label": "Detta", "flabel": "OO"},
+      {"id": '1', "label": "kan", "flabel": "HD"},
+      {"id": '2', "label": "åtminstone", "flabel": "MD"},
+      {"id": '3', "label": "jag", "flabel": "SB"},
+      {"id": '4', "label": "personligen", "flabel": "HD"},
+      {"id": '5', "label": "helt", "flabel": "KL"},
+      {"id": '6', "label": "och", "flabel": "PH"},
+      {"id": '7', "label": "hållet", "flabel": "KL"},
+      {"id": '8', "label": "instämma", "flabel": "HD"},
+      {"id": '9', "label": "i", "flabel": "HD"},
+      {"id": '10', "label": "."},
+      {"id": '12', "label": "S", "children": ['15', '1', '14', '3']},
+      {"id": '13', "label": "PP", "children": ['0', '9'], "flabel": "MD"},
+      {"id": '14', "label": "AbP", "children": ['2', '4'], "flabel": "MD"},
+      {"id": '11', "label": "KoP", "children": ['5', '6', '7'], "flabel": "MD"},
+      {"id": '15', "label": "VP", "children": ['13', '11', '8'], "flabel": "IV"}
+  )
+
+  G('europarl',
+      {"id": '0', "label": "Detta", "flabel": "OO"},
+      {"id": '1', "label": "kan", "flabel": "HD"},
+      {"id": '2', "label": "åtminstone", "flabel": "MD"},
+      {"id": '3', "label": "jag", "flabel": "SB"},
+      {"id": '4', "label": "personligen", "flabel": "HD"},
+      {"id": '5', "label": "helt", "flabel": "KL"},
+      {"id": '6', "label": "och", "flabel": "PH"},
+      {"id": '7', "label": "hållet", "flabel": "KL"},
+      {"id": '8', "label": "instämma", "flabel": "HD"},
+      {"id": '9', "label": "i", "flabel": "HD"},
+      {"id": '10', "label": "."},
+      {"id": '11', "label": "KoP", "children": ['5', '6', '7'], "flabel": "MD"},
+      {"id": '12', "label": "S", "children": ['15', '1', '14', '3']},
+      {"id": '13', "label": "PP", "children": ['0', '9'], "flabel": "MD"},
+      {"id": '14', "label": "AbP", "children": ['2', '4'], "flabel": "MD"},
+      {"id": '15', "label": "VP", "children": ['13', '11', '8'], "flabel": "IV"}
+  )
+
+  G('europarl',
+      {"id": '0', "label": "Detta", "flabel": "OO"},
+      {"id": '1', "label": "kan", "flabel": "HD"},
+      {"id": '2', "label": "åtminstone", "flabel": "MD"},
+      {"id": '3', "label": "jag", "flabel": "SB"},
+      {"id": '4', "label": "personligen", "flabel": "HD"},
+      {"id": '5', "label": "helt", "flabel": "KL"},
+      {"id": '6', "label": "och", "flabel": "PH"},
+      {"id": '7', "label": "hållet", "flabel": "KL"},
+      {"id": '8', "label": "instämma", "flabel": "HD"},
+      {"id": '9', "label": "i", "flabel": "HD"},
+      {"id": '10', "label": "."},
+      {"id": '14', "label": "AbP", "children": ['2', '4'], "flabel": "MD"},
+      {"id": '12', "label": "S", "children": ['15', '1', '14', '3']},
+      {"id": '13', "label": "PP", "children": ['0', '9'], "flabel": "MD"},
+      {"id": '11', "label": "KoP", "children": ['5', '6', '7'], "flabel": "MD"},
+      {"id": '15', "label": "VP", "children": ['13', '11', '8'], "flabel": "IV"}
+  )
+
+  G('europarl',
+      {"id": '0', "label": "Detta", "flabel": "OO"},
+      {"id": '1', "label": "kan", "flabel": "HD"},
+      {"id": '2', "label": "åtminstone", "flabel": "MD"},
+      {"id": '3', "label": "jag", "flabel": "SB"},
+      {"id": '4', "label": "personligen", "flabel": "HD"},
+      {"id": '5', "label": "helt", "flabel": "KL"},
+      {"id": '6', "label": "och", "flabel": "PH"},
+      {"id": '7', "label": "hållet", "flabel": "KL"},
+      {"id": '8', "label": "instämma", "flabel": "HD"},
+      {"id": '9', "label": "i", "flabel": "HD"},
+      {"id": '10', "label": "."},
+      {"id": '14', "label": "AbP", "children": ['2', '4'], "flabel": "MD"},
+      {"id": '12', "label": "S", "children": ['15', '1', '14', '3']},
+      {"id": '11', "label": "KoP", "children": ['5', '6', '7'], "flabel": "MD"},
+      {"id": '13', "label": "PP", "children": ['0', '9'], "flabel": "MD"},
+      {"id": '15', "label": "VP", "children": ['13', '11', '8'], "flabel": "IV"}
+  )
+
+  G('europarl-TV',
+  /*
+    {"id": 0, "label": "Först", "flabel": "MD"},
+    {"id": 1, "label": "skulle", "flabel": "HD"},
+    {"id": 2, "label": "jag", "flabel": "SB"},
+    {"id": 3, "label": "vilja", "flabel": "HD"},
+    {"id": 4, "label": "ge", "flabel": "HD"},
+    {"id": 5, "label": "er", "flabel": "IO"},
+    {"id": 6, "label": "en", "flabel": "DT"},
+    {"id": 7, "label": "komplimang", "flabel": "HD"},
+    {"id": 8, "label": "för", "flabel": "HD"},
+    {"id": 9, "label": "det", "flabel": "DT"},
+    {"id": 10, "label": "faktum", "flabel": "HD"},
+    {"id": 11, "label": "att", "flabel": "HD"},
+    {"id": 12, "label": "ni", "flabel": "SB"},
+    {"id": 13, "label": "hållit", "flabel": "ME"},
+    {"id": 14, "label": "ert", "flabel": "DT"},
+    {"id": 15, "label": "ord", "flabel": "HD"},
+    {"id": 16, "label": "och", "flabel": "PH"},
+    {"id": 17, "label": "att", "flabel": "HD"},
+      */
+    {"id": 18, "label": "det", "flabel": "SB"},
+    {"id": 19, "label": "nu", "flabel": "HD"},
+    {"id": 20, "label": ","},
+    {"id": 21, "label": "under", "flabel": "HD"},
+    {"id": 22, "label": "det", "flabel": "DT"},
+    {"id": 23, "label": "nya", "flabel": "MD"},
+    {"id": 24, "label": "årets", "flabel": "HD"},
+    {"id": 25, "label": "första", "flabel": "MD"},
+    {"id": 26, "label": "sammanträdesperiod", "flabel": "HD"},
+    {"id": 27, "label": ","},
+    {"id": 28, "label": "faktiskt", "flabel": "MD"},
+    {"id": 29, "label": "har", "flabel": "HD"},
+    {"id": 30, "label": "skett", "flabel": "HD"},
+    {"id": 31, "label": "en", "flabel": "DT"},
+    {"id": 32, "label": "kraftig", "flabel": "MD"},
+    {"id": 33, "label": "utökning", "flabel": "HD"},
+    {"id": 34, "label": "av", "flabel": "HD"},
+    {"id": 35, "label": "antalet", "flabel": "HD"},
+    {"id": 36, "label": "TV-kanaler", "flabel": "HD"},
+    {"id": 37, "label": "på", "flabel": "HD"},
+    {"id": 38, "label": "våra", "flabel": "DT"},
+    {"id": 39, "label": "rum", "flabel": "HD"},
+    {"id": 40, "label": "."},
+    {"id": 41, "label": "NP", "children": [38, 39], "flabel": "OO"},
+    {"id": 42, "label": "PP", "children": [37, 41], "flabel": "MD"},
+    {"id": 43, "label": "NP", "children": [35, 63], "flabel": "OO"},
+    {"id": 44, "label": "PP", "children": [34, 43], "flabel": "MD"},
+    {"id": 45, "label": "NP", "children": [31, 32, 33, 44], "flabel": "ES"},
+    {"id": 46, "label": "VP", "children": [30, 45], "flabel": "IV"},
+    {"id": 47, "label": "NP", "children": [22, 23, 24], "flabel": "DT"},
+    {"id": 48, "label": "NP", "children": [47, 25, 26], "flabel": "OO"},
+    {"id": 49, "label": "PP", "children": [21, 48], "flabel": "AN"},
+    {"id": 50, "label": "S", "children": [18, 65, 28, 29, 46], "flabel": "OO"},
+    {"id": 51, "label": "SuP", "children": [17, 50], "flabel": "KL"},
+    {"id": 52, "label": "NP", "children": [14, 15], "flabel": "OO"},
+    {"id": 53, "label": "S", "children": [12, 62], "flabel": "OO"},
+    {"id": 54, "label": "SuP", "children": [11, 53], "flabel": "KL"},
+    {"id": 55, "label": "KoP", "children": [54, 16, 51], "flabel": "MD"},
+    {"id": 56, "label": "NP", "children": [9, 10, 55], "flabel": "OO"},
+    {"id": 57, "label": "PP", "children": [8, 56], "flabel": "MD"},
+    {"id": 58, "label": "NP", "children": [6, 7, 57], "flabel": "OO"},
+    {"id": 59, "label": "VP", "children": [4, 5, 58], "flabel": "IV"},
+    {"id": 60, "label": "VP", "children": [3, 59], "flabel": "IV"},
+    {"id": 61, "label": "S", "children": [0, 1, 2, 60]},
+    {"id": 62, "label": "VP", "children": [64, 52], "flabel": "IV"},
+    {"id": 63, "label": "NP", "children": [36, 42], "flabel": "MD"},
+    {"id": 64, "label": "VBM", "children": [13], "flabel": "HD"},
+    {"id": 65, "label": "AbP", "children": [19, 49], "flabel": "MD"}
+  )
 }
-
-G('europarl',
-    {"id": '0', "label": "Detta", "flabel": "OO"},
-    {"id": '1', "label": "kan", "flabel": "HD"},
-    {"id": '2', "label": "åtminstone", "flabel": "MD"},
-    {"id": '3', "label": "jag", "flabel": "SB"},
-    {"id": '4', "label": "personligen", "flabel": "HD"},
-    {"id": '5', "label": "helt", "flabel": "KL"},
-    {"id": '6', "label": "och", "flabel": "PH"},
-    {"id": '7', "label": "hållet", "flabel": "KL"},
-    {"id": '8', "label": "instämma", "flabel": "HD"},
-    {"id": '9', "label": "i", "flabel": "HD"},
-    {"id": '10', "label": "."},
-    {"id": '12', "label": "S", "children": ['15', '1', '14', '3']},
-    {"id": '13', "label": "PP", "children": ['0', '9'], "flabel": "MD"},
-    {"id": '14', "label": "AbP", "children": ['2', '4'], "flabel": "MD"},
-    {"id": '11', "label": "KoP", "children": ['5', '6', '7'], "flabel": "MD"},
-    {"id": '15', "label": "VP", "children": ['13', '11', '8'], "flabel": "IV"}
-)
-
-G('europarl',
-    {"id": '0', "label": "Detta", "flabel": "OO"},
-    {"id": '1', "label": "kan", "flabel": "HD"},
-    {"id": '2', "label": "åtminstone", "flabel": "MD"},
-    {"id": '3', "label": "jag", "flabel": "SB"},
-    {"id": '4', "label": "personligen", "flabel": "HD"},
-    {"id": '5', "label": "helt", "flabel": "KL"},
-    {"id": '6', "label": "och", "flabel": "PH"},
-    {"id": '7', "label": "hållet", "flabel": "KL"},
-    {"id": '8', "label": "instämma", "flabel": "HD"},
-    {"id": '9', "label": "i", "flabel": "HD"},
-    {"id": '10', "label": "."},
-    {"id": '11', "label": "KoP", "children": ['5', '6', '7'], "flabel": "MD"},
-    {"id": '12', "label": "S", "children": ['15', '1', '14', '3']},
-    {"id": '13', "label": "PP", "children": ['0', '9'], "flabel": "MD"},
-    {"id": '14', "label": "AbP", "children": ['2', '4'], "flabel": "MD"},
-    {"id": '15', "label": "VP", "children": ['13', '11', '8'], "flabel": "IV"}
-)
-
-G('europarl',
-    {"id": '0', "label": "Detta", "flabel": "OO"},
-    {"id": '1', "label": "kan", "flabel": "HD"},
-    {"id": '2', "label": "åtminstone", "flabel": "MD"},
-    {"id": '3', "label": "jag", "flabel": "SB"},
-    {"id": '4', "label": "personligen", "flabel": "HD"},
-    {"id": '5', "label": "helt", "flabel": "KL"},
-    {"id": '6', "label": "och", "flabel": "PH"},
-    {"id": '7', "label": "hållet", "flabel": "KL"},
-    {"id": '8', "label": "instämma", "flabel": "HD"},
-    {"id": '9', "label": "i", "flabel": "HD"},
-    {"id": '10', "label": "."},
-    {"id": '14', "label": "AbP", "children": ['2', '4'], "flabel": "MD"},
-    {"id": '12', "label": "S", "children": ['15', '1', '14', '3']},
-    {"id": '13', "label": "PP", "children": ['0', '9'], "flabel": "MD"},
-    {"id": '11', "label": "KoP", "children": ['5', '6', '7'], "flabel": "MD"},
-    {"id": '15', "label": "VP", "children": ['13', '11', '8'], "flabel": "IV"}
-)
-
-G('europarl',
-    {"id": '0', "label": "Detta", "flabel": "OO"},
-    {"id": '1', "label": "kan", "flabel": "HD"},
-    {"id": '2', "label": "åtminstone", "flabel": "MD"},
-    {"id": '3', "label": "jag", "flabel": "SB"},
-    {"id": '4', "label": "personligen", "flabel": "HD"},
-    {"id": '5', "label": "helt", "flabel": "KL"},
-    {"id": '6', "label": "och", "flabel": "PH"},
-    {"id": '7', "label": "hållet", "flabel": "KL"},
-    {"id": '8', "label": "instämma", "flabel": "HD"},
-    {"id": '9', "label": "i", "flabel": "HD"},
-    {"id": '10', "label": "."},
-    {"id": '14', "label": "AbP", "children": ['2', '4'], "flabel": "MD"},
-    {"id": '12', "label": "S", "children": ['15', '1', '14', '3']},
-    {"id": '11', "label": "KoP", "children": ['5', '6', '7'], "flabel": "MD"},
-    {"id": '13', "label": "PP", "children": ['0', '9'], "flabel": "MD"},
-    {"id": '15', "label": "VP", "children": ['13', '11', '8'], "flabel": "IV"}
-)
-
-G('europarl-TV',
-/*
-  {"id": 0, "label": "Först", "flabel": "MD"},
-  {"id": 1, "label": "skulle", "flabel": "HD"},
-  {"id": 2, "label": "jag", "flabel": "SB"},
-  {"id": 3, "label": "vilja", "flabel": "HD"},
-  {"id": 4, "label": "ge", "flabel": "HD"},
-  {"id": 5, "label": "er", "flabel": "IO"},
-  {"id": 6, "label": "en", "flabel": "DT"},
-  {"id": 7, "label": "komplimang", "flabel": "HD"},
-  {"id": 8, "label": "för", "flabel": "HD"},
-  {"id": 9, "label": "det", "flabel": "DT"},
-  {"id": 10, "label": "faktum", "flabel": "HD"},
-  {"id": 11, "label": "att", "flabel": "HD"},
-  {"id": 12, "label": "ni", "flabel": "SB"},
-  {"id": 13, "label": "hållit", "flabel": "ME"},
-  {"id": 14, "label": "ert", "flabel": "DT"},
-  {"id": 15, "label": "ord", "flabel": "HD"},
-  {"id": 16, "label": "och", "flabel": "PH"},
-  {"id": 17, "label": "att", "flabel": "HD"},
-    */
-  {"id": 18, "label": "det", "flabel": "SB"},
-  {"id": 19, "label": "nu", "flabel": "HD"},
-  {"id": 20, "label": ","},
-  {"id": 21, "label": "under", "flabel": "HD"},
-  {"id": 22, "label": "det", "flabel": "DT"},
-  {"id": 23, "label": "nya", "flabel": "MD"},
-  {"id": 24, "label": "årets", "flabel": "HD"},
-  {"id": 25, "label": "första", "flabel": "MD"},
-  {"id": 26, "label": "sammanträdesperiod", "flabel": "HD"},
-  {"id": 27, "label": ","},
-  {"id": 28, "label": "faktiskt", "flabel": "MD"},
-  {"id": 29, "label": "har", "flabel": "HD"},
-  {"id": 30, "label": "skett", "flabel": "HD"},
-  {"id": 31, "label": "en", "flabel": "DT"},
-  {"id": 32, "label": "kraftig", "flabel": "MD"},
-  {"id": 33, "label": "utökning", "flabel": "HD"},
-  {"id": 34, "label": "av", "flabel": "HD"},
-  {"id": 35, "label": "antalet", "flabel": "HD"},
-  {"id": 36, "label": "TV-kanaler", "flabel": "HD"},
-  {"id": 37, "label": "på", "flabel": "HD"},
-  {"id": 38, "label": "våra", "flabel": "DT"},
-  {"id": 39, "label": "rum", "flabel": "HD"},
-  {"id": 40, "label": "."},
-  {"id": 41, "label": "NP", "children": [38, 39], "flabel": "OO"},
-  {"id": 42, "label": "PP", "children": [37, 41], "flabel": "MD"},
-  {"id": 43, "label": "NP", "children": [35, 63], "flabel": "OO"},
-  {"id": 44, "label": "PP", "children": [34, 43], "flabel": "MD"},
-  {"id": 45, "label": "NP", "children": [31, 32, 33, 44], "flabel": "ES"},
-  {"id": 46, "label": "VP", "children": [30, 45], "flabel": "IV"},
-  {"id": 47, "label": "NP", "children": [22, 23, 24], "flabel": "DT"},
-  {"id": 48, "label": "NP", "children": [47, 25, 26], "flabel": "OO"},
-  {"id": 49, "label": "PP", "children": [21, 48], "flabel": "AN"},
-  {"id": 50, "label": "S", "children": [18, 65, 28, 29, 46], "flabel": "OO"},
-  {"id": 51, "label": "SuP", "children": [17, 50], "flabel": "KL"},
-  {"id": 52, "label": "NP", "children": [14, 15], "flabel": "OO"},
-  {"id": 53, "label": "S", "children": [12, 62], "flabel": "OO"},
-  {"id": 54, "label": "SuP", "children": [11, 53], "flabel": "KL"},
-  {"id": 55, "label": "KoP", "children": [54, 16, 51], "flabel": "MD"},
-  {"id": 56, "label": "NP", "children": [9, 10, 55], "flabel": "OO"},
-  {"id": 57, "label": "PP", "children": [8, 56], "flabel": "MD"},
-  {"id": 58, "label": "NP", "children": [6, 7, 57], "flabel": "OO"},
-  {"id": 59, "label": "VP", "children": [4, 5, 58], "flabel": "IV"},
-  {"id": 60, "label": "VP", "children": [3, 59], "flabel": "IV"},
-  {"id": 61, "label": "S", "children": [0, 1, 2, 60]},
-  {"id": 62, "label": "VP", "children": [64, 52], "flabel": "IV"},
-  {"id": 63, "label": "NP", "children": [36, 42], "flabel": "MD"},
-  {"id": 64, "label": "VBM", "children": [13], "flabel": "HD"},
-  {"id": 65, "label": "AbP", "children": [19, 49], "flabel": "MD"}
-)
 
 function xmlToSpec(romaner: string) {
     const p = new DOMParser()
@@ -1003,7 +1164,7 @@ function xmlToSpec(romaner: string) {
         // if ((no_discont) || long_sent) {
         //   continue
         // }
-        if (found++ > 100) {
+        if (found++ > 15) {
           break
         }
         const terminals  = $(s, 't')
@@ -1050,12 +1211,12 @@ function xmlToSpec(romaner: string) {
     return specs
 }
 
-// import {default as romaner} from './europarl.js'
-// console.log(romaner.length)
-// const specs = xmlToSpec(romaner)
-// console.time('G')
-// specs.forEach(({name, spec}) => G(name, ...spec))
-// console.timeEnd('G')
+import {default as romaner} from './romaner.js'
+console.log(romaner.length)
+const specs = xmlToSpec(romaner)
+console.time('G')
+specs.forEach(({name, spec}) => G(name, ...spec))
+console.timeEnd('G')
 
 console.time('diff')
 body(sheet(), ...page)(document.body)
