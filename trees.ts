@@ -46,12 +46,13 @@ const page = []
 type Spec<A> = SpecEntry<A>[]
 
 interface SpecEntry<A> {
-  id: string,
+  id: string
   children?: string[]
-  label: A,
-  flabel?: A,
+  label: A
+  flabel?: A
+  secondary?: {id: string, label: A}[]
+  only?: string
 }
-
 
 type Diff = (e?: Element) => Element
 
@@ -139,27 +140,14 @@ function lines_of_box(b: Box): Line[] {
   const bottom= Math.min(y1, y2),
   const top   = Math.max(y1, y2),
   return [
-    {tag: 'V', top, bottom, x: left}
-    {tag: 'V', top, bottom, x: right}
-    {tag: 'H', left, right, y: top}
-    {tag: 'H', left, right, y: bottom}
+    {tag: 'V', top, bottom, x: left},
+    {tag: 'V', top, bottom, x: right},
+    {tag: 'H', left, right, y: top},
+    {tag: 'H', left, right, y: bottom},
   ]
 }
 
-function slope(l: Line): {k: number, m: number} | 'vertical' {
-  const {x1, y1, x2, y2} = l
-  if (dx === 0) {
-    return 'vertical'
-  } else {
-    const k = dy / dx
-    return {
-      k,
-      m: k * x1 - y1
-    }
-  }
-}
-
-function intersect(p: Point, q: Point, v: Line) {
+function intersect(p: Point, q: Point, v: Line): boolean {
   if (v.tag == 'H') {
     return intersect(
       flip_point(p),
@@ -269,9 +257,10 @@ const default_options = {
 type id = string
 
 type Content = Readonly<
-  | {tag: 'diff', diff: Diff, rect?: Rect, x?: number, y?: number}
+  | {tag: 'diff', id?: id, diff: Diff, rect?: Rect, x?: number, y?: number}
   | {tag: 'block', block: Block, x?: number, y?: number}
   | {tag: 'hline', left: id, right: id, height: number}
+  | {tag: 'mainline', left: id, right: id, height: number}
   | {tag: 'vline', x: number, bottom: number, top: number}
 >
 
@@ -292,11 +281,13 @@ function Graphics(
 
   const next_id = (() => {
     let id = 0
-    return () => '' + id++
+    return () => id+++''
   })()
 
   let row: Block[] = []
   const blocks: Record<id, Block> = {}
+
+  const secs: {source: id, target: () => id}[] = []
 
   function terminal(element: DiffWithRect): id {
     const id = next_id()
@@ -364,6 +355,7 @@ function Graphics(
       | {group: 'contains', id: id}
       | {group: 'only', id: id},
     flabels?: Record<string, DiffWithRect>,
+    secondary?: {label: DiffWithRect, target: () => id, right?: boolean}[]
   ): id {
     const children_id_remap = new Map(children_ids.map(id => [id, id]))
     const children_blocks_0 = row.filter(block => children_id_remap.has(block.id))
@@ -377,7 +369,7 @@ function Graphics(
     const desired_height = Math.max(
       ...reach.map(i => row[i].min_height),
       ...children_blocks_0.map(block => block.min_height + opts.gap_under_flabel + utils.maybe(flabels_[block.id], 0, i => i.rect.height))
-    )
+    ) + (secondary && secondary.length > 0 ? 10 : 0)
 
     const new_min_height = desired_height + opts.gap_over_flabel
 
@@ -401,7 +393,7 @@ function Graphics(
 
     const children_blocks = Array.from(children_id_remap.values()).map(id => blocks[id])
 
-    children_blocks.forEach(block => {
+    function add_line_to_hbar(block: Block) {
       // this is making the line up to the bar. do we need a new id here?
       // we might if there are no flabels but sec-edges
       const old_top = block.top
@@ -412,7 +404,9 @@ function Graphics(
         bottom: old_top,
         top: block.top,
       })
-    })
+    }
+
+    children_blocks.forEach(add_line_to_hbar)
 
     const main_ = main || {group: 'widest'}
 
@@ -445,13 +439,50 @@ function Graphics(
 
     const gblocks = group.blocks
 
+    let left_id = row[leftmost].id
+    let right_id = row[rightmost].id
+
+    // adding more contents for seclabels
+    ;(secondary || []).forEach(secedge => {
+      const id = next_id()
+      const id$source = id + '$source'
+      secs.push({source: id$source, target: secedge.target})
+      const content: Content = {
+        tag: 'diff',
+        id: id$source,
+        diff: secedge.label.diff,
+        rect: secedge.label.rect,
+        y: desired_height - secedge.label.rect.height
+      }
+      const block: Block = {
+        id,
+        right: secedge.label.rect.width + opts.gap_x,
+        mid: secedge.label.rect.width / 2,
+        top: desired_height,
+        min_height: new_min_height,
+        contents: [content]
+      }
+      add_line_to_hbar(block)
+      if (secedge.right) {
+        if (gblocks[gblocks.length - 1].id == right_id) {
+          right_id = block.id
+        }
+        gblocks.push(block)
+      } else {
+        if (gblocks[0].id == left_id) {
+          left_id = block.id
+        }
+        gblocks.unshift(block)
+      }
+    })
+
     const id = next_id()
     const right = utils.sum(gblocks.map(b => b.right))
     const top = gblocks[0].top
     const min_height = top
-
     const leftmost_mid = gblocks[0].mid
 
+    // this may be upgraded to an as narrow as possible horizonal concat
     let x = 0
     let rightmost_mid = 0
     const contents: Content[] = gblocks.map(block => {
@@ -469,10 +500,17 @@ function Graphics(
 
     contents.push({
       tag: 'hline',
-      left: row[leftmost].id,
-      right: row[rightmost].id,
+      left: left_id,
+      right: right_id,
       height: top
     })
+    contents.push({
+      tag: 'mainline',
+      left: gblocks[0].id,
+      right: gblocks[gblocks.length-1].id,
+      height: top
+    })
+
 
     const block = {
       id,
@@ -496,6 +534,8 @@ function Graphics(
   }
 
   function seal(child_id: id) {
+    // seal to make orphan nodes (like punctiation in Eukalyptus)
+    // count as consecutive
     const ix = row.findIndex(b => b.id == child_id)
     if (ix != -1 && ix != 0) {
       const seal_block = row[ix]
@@ -523,7 +563,7 @@ function Graphics(
     p(left - 1, bottom, right + 1, bottom, black)
 
   const vline = (x: number, bottom: number, top: number) => g(
-    p(x, bottom+opts.line_width / 2, x, top-opts.line_width / 2, white)
+    p(x, bottom+opts.line_width / 2, x, top-opts.line_width / 2, white),
     p(x, bottom, x, top, black)
   )
 
@@ -533,14 +573,23 @@ function Graphics(
     const svg_children: Diff[] = []
 
     const mids: Record<string, number> = {}
+    const tops: Record<string, number> = {}
+    const bots: Record<string, number> = {}
     const hlines: {left: id, right: id, height: number}[] = []
+    const mainlines: {left: id, right: id, height: number}[] = []
+
+    const final_secs: {source: id, target: id}[] = secs.map(s => ({...s, target: s.target()}))
 
     let width = 0, height = 0
+
+    const blocks_by_id: Record<id, any> = {}
 
     function rec(block: Block, x: number, y: number) {
       width = Math.max(width, x + block.right)
       height = Math.max(height, y + block.top)
       mids[block.id] = x + block.mid
+      tops[block.id] = y + block.top
+      bots[block.id] = y
       block.contents.forEach((c: Content) => {
         if (c.tag == 'block') {
           const dx = x + (c.x || 0)
@@ -557,10 +606,21 @@ function Graphics(
             )
           )
           c.rect && c.rect.width && dy > 0 && boxes.push(offset_rect(c.rect, dx, dy))
+          if (c.id && c.rect) {
+            mids[c.id] = dx + c.rect.width / 2
+            tops[c.id] = dy + c.rect.height
+            bots[c.id] = dy
+          }
         } else if (c.tag == 'vline') {
           svg_children.push(vline(c.x + x, c.bottom + y, c.top + y))
         } else if (c.tag == 'hline') {
           hlines.push({
+            left: c.left,
+            right: c.right,
+            height: c.height + y
+          })
+        } else if (c.tag == 'mainline') {
+          mainlines.push({
             left: c.left,
             right: c.right,
             height: c.height + y
@@ -585,56 +645,135 @@ function Graphics(
     hlines.forEach(h => {
       svg_children.push(
         hline(h.height, mids[h.left], mids[h.right]))
+    })
 
+    mainlines.forEach(h => {
       const rect = {
-        height: 3,
+        height: opts.gap_over_flabel + opts.gap_under_label + 4,
         width: mids[h.right] - mids[h.left]
       }
-      boxes.push(offset_rect(rect, mids[h.left], h.height - 5))
+      boxes.push(offset_rect(rect, mids[h.left], h.height - opts.gap_over_flabel - 2))
     })
 
     svg_children.reverse()
 
     const str = p => `${p.x},${p.y}`
 
-    boxes.map(b => scale(b, 1.2, 1.1)).forEach(b => {
+    boxes.map(b => scale(b, 1, 1)).forEach(b => {
+      return
       svg_children.push(
         path(
           d('M' + points_of_box(b).map(str).join(' L')),
-          css`stroke: blue; stroke-width: 2px; fill: none`
+          css`stroke: blue; stroke-width: 1px; fill: none`
         )
       )
     })
 
-    let source = {x: 33, y: 20}
-    let target = {x: 128, y: 128}
-    // for (let count = 7; count < 11; ++count) {
-    for (let count = 22; count < 27; ++count) {
+    function catmull_rom(data0: Point[], k: number) {
+      // https://codepen.io/osublake/pen/BowJed
+      const data: number[] = []
+      data0.forEach(p => {
+        data.push(p.x)
+        data.push(p.y)
+      })
 
-      const i = (33 * count + 17) % boxes.length // Math.floor(Math.random() * boxes.length)
-      const j = (37 * count + 19) % boxes.length // Math.floor(Math.random() * boxes.length)
-      source = {
-        x: (boxes[i].x1 + boxes[i].x2) / 2,
-        y: boxes[i].y1 - 2,
+      if (k == null) k = 1;
+
+      var size = data.length;
+      var last = size - 4;
+
+      var path = "M" + [data[0], data[1]];
+
+      for (var i = 0; i < size - 2; i +=2) {
+
+        var x0 = i ? data[i - 2] : data[0];
+        var y0 = i ? data[i - 1] : data[1];
+
+        var x1 = data[i + 0];
+        var y1 = data[i + 1];
+
+        var x2 = data[i + 2];
+        var y2 = data[i + 3];
+
+        var x3 = i !== last ? data[i + 4] : x2;
+        var y3 = i !== last ? data[i + 5] : y2;
+
+        var cp1x = x1 + (x2 - x0) / 6 * k;
+        var cp1y = y1 + (y2 - y0) / 6 * k;
+
+        var cp2x = x2 - (x3 - x1) / 6 * k;
+        var cp2y = y2 - (y3 - y1) / 6 * k;
+
+        path += "C" + [cp1x, cp1y, cp2x, cp2y, x2, y2];
       }
 
-      target = {
-        x: (boxes[j].x1 + boxes[j].x2) / 2,
-        y: boxes[j].y2 + 2,
+      return path;
+    }
+
+    final_secs.forEach(sec => {
+
+      const source = {
+        x: mids[sec.source],
+        y: bots[sec.source],
       }
 
-      const esp = euclidean_shortest_path(source, target, boxes.map(b => scale(b, 1.1, 0.95))
+      const target = {
+        x: mids[sec.target],
+        y: tops[sec.target],
+      }
 
-      esp && esp.path.length > 2 && svg_children.push(
-        path(
-          d('M' + esp.path.map(str).join(' L')),
-          css`stroke: red; stroke-width: 2px; fill: none`
+      const esp = euclidean_shortest_path(source, target, boxes.map(b => scale(b, 1, 1)))
+
+      if (esp) {
+        svg_children.push(
+          path(
+            d(catmull_rom(esp.path, 0.3)),
+            css`stroke: red; stroke-width: 2px; fill: none`
+          )
         )
-      )
+      }
 
-      console.log(esp)
+      // esp && esp.path.forEach((p, i) => {
+      //   i != 0 && i != esp.path.length - 1 && boxes.push({
+      //     x1: p.x - 3,
+      //     y1: p.y - 3,
+      //     x2: p.x + 3,
+      //     y2: p.y + 3,
+      //   })
+      // })
 
-      ;[source, target] = [0, 1].map(_ => ({x: Math.random() * width, y: Math.random() * height}))
+    })
+
+    if (false) {
+      let source = {x: 33, y: 20}
+      let target = {x: 128, y: 128}
+      for (let count = 22; count < 27; ++count) {
+
+        const i = (33 * count + 17) % boxes.length // Math.floor(Math.random() * boxes.length)
+        const j = (37 * count + 19) % boxes.length // Math.floor(Math.random() * boxes.length)
+        source = {
+          x: (boxes[i].x1 + boxes[i].x2) / 2,
+          y: boxes[i].y1 - 2,
+        }
+
+        target = {
+          x: (boxes[j].x1 + boxes[j].x2) / 2,
+          y: boxes[j].y2 + 2,
+        }
+
+        const esp = euclidean_shortest_path(source, target, boxes.map(b => scale(b, 1.1, 0.95))
+
+        esp && esp.path.length > 2 && svg_children.push(
+          path(
+            d('M' + esp.path.map(str).join(' L')),
+            css`stroke: red; stroke-width: 2px; fill: none`
+          )
+        )
+
+        console.log(esp)
+
+        ;[source, target] = [0, 1].map(_ => ({x: Math.random() * width, y: Math.random() * height}))
+      }
     }
 
     const svg_lines = svg(
@@ -658,6 +797,8 @@ const try_span = (s?: string) => s ? span(style`white-space: pre; display: inlin
 
 function measure_spec(measure_root: Element, spec: Spec<string | undefined>): Spec<DiffWithRect> {
 
+  const spec_by_id = utils.by('id', spec)
+
   const p = {} as Record<string, Element>
 
   const position = (text: string) => {
@@ -673,7 +814,12 @@ function measure_spec(measure_root: Element, spec: Spec<string | undefined>): Sp
   spec.forEach(e => {
     e.label && position(e.label)
     e.flabel && position(e.flabel)
+    e.secondary && e.secondary.forEach(secedge => {
+      secedge.label && position(secedge.label)
+    })
   })
+
+
 
   function measure(text?: string) {
     if (text === undefined || text === '') {
@@ -694,6 +840,12 @@ function measure_spec(measure_root: Element, spec: Spec<string | undefined>): Sp
       ...e,
       label: measure(e.label),
       flabel: measure(e.flabel),
+      secondary:
+        (e.secondary || []).map(
+          secedge => ({
+            ...secedge,
+            label: measure(secedge.label)
+          }))
     }
   })
 
@@ -715,6 +867,17 @@ const G = (name: string | number, ...spec0: Spec<string | undefined>) => {
 
   const graphics = Graphics()
 
+  const rightmost: Record<string, number> = {}
+  let i = 0
+
+  spec.forEach(s => {
+    if (!s.children || s.children.length == 0) {
+      rightmost[s.id] = i++
+    } else {
+      rightmost[s.id] = Math.max(...s.children.map(cid => rightmost[cid]))
+    }
+  })
+
   spec.forEach(s => {
     if (!s.children || s.children.length == 0) {
       state[s.id] = graphics.terminal(s.label)
@@ -728,6 +891,15 @@ const G = (name: string | number, ...spec0: Spec<string | undefined>) => {
         only ? {group: 'only', id: only} :
         HDs.length > 0 ? {group: 'contains', id: HDs[0]} : {group: 'widest'},
         Object.fromEntries(s.children.map(id => [state[id], spec_by_id[id].flabel || zero])),
+        (s.secondary || []).sort((s1, s2) => {
+          const d = rightmost[s2.id] - rightmost[s1.id]
+          const r = rightmost[s1.id] > rightmost[s.id]
+          return r ? -d : d
+        }).map(secedge => ({
+          label: secedge.label,
+          target: () => state[secedge.id],
+          right: rightmost[secedge.id] > rightmost[s.id]
+        }))
       )
       state[s.id] = graphics.label(nt, s.label, undefined)
       has_parent[s.id] || graphics.seal(state[s.id])
@@ -761,30 +933,20 @@ const G = (name: string | number, ...spec0: Spec<string | undefined>) => {
   )
 }
 
-function traverse(obj, k) {
-  if (Array.isArray(obj)) {
-    return obj.map(x => traverse(x, k))
-  } else if (typeof obj == 'object') {
-    return obj.map(x => traverse(x, k))
-  }
-}
-
-function renumber(obj) {
-  const ids = {}
+function renumber<A>(obj: Spec<A>): Spec<A> {
+  const ids: Record<string, string> = {}
   obj.forEach(x => {
     if (x.id && !(x.id in ids)) {
-      ids[x.id] = Object.keys(ids).length
+      ids[x.id] = Object.keys(ids).length + ''
     }
   })
   return obj.map(x => {
-    const y = {...x}
-    if (x.id) {
-      y.id = ids[x.id]
+    return {
+      ...x,
+      id: ids[x.id],
+      children: (x.children || []).map(z => ids[z]),
+      secondary: (x.secondary || []).map(z => ({...z, id: ids[z.id]}))
     }
-    if (x.children) {
-      y.children = y.children.map(z => ids[z])
-    }
-    return y
   })
 }
 
@@ -804,6 +966,542 @@ if (true) {
     {id: 'RA', label: '', flabel: 'RA', only: 'dit', children: utils.words('dit')},
     {id: 'OO', label: '', flabel: 'OO', only: 'åka', children: utils.words('åka RA')},
     {id: 'RT', label: 'RT', flabel: '', only: 'vill', children: utils.words('SB vill OO')},
+  )
+
+  G('hm2',
+    {
+      "id": "0",
+      "label": "Svenson",
+      "flabel": "SB",
+      "children": [],
+      "secondary": []
+    },
+    {
+      "id": "1",
+      "label": "börjar",
+      "flabel": "HD",
+      "children": [],
+      "secondary": []
+    },
+    {
+      "id": "2",
+      "label": "skrika",
+      "flabel": "HD",
+      "children": [],
+      "secondary": []
+    },
+    {
+      "id": "3",
+      "label": "och",
+      "flabel": "PH",
+      "children": [],
+      "secondary": []
+    },
+    {
+      "id": "4",
+      "label": "gestikulera",
+      "flabel": "HD",
+      "children": [],
+      "secondary": []
+    },
+    {"id": "5", "label": ":", "children": [], "secondary": []},
+    {"id": "6", "label": "KoP", "children": ["7", "3", "10"], "secondary": []},
+    {
+      "id": "7",
+      "label": "S",
+      "children": ["0", "1", "8"],
+      "secondary": [],
+      "flabel": "KL"
+    },
+    {
+      "id": "8",
+      "label": "VP",
+      "children": ["2"],
+      "secondary": [{"id": "0", "label": "SB"}],
+      "flabel": "IV"
+    },
+    {
+      "id": "9",
+      "label": "VP",
+      "children": ["4"],
+      "secondary": [{"id": "0", "label": "SB"}],
+      "flabel": "IV"
+    },
+    {
+      "id": "10",
+      "label": "S",
+      "children": ["9"],
+      "secondary": [{"id": "0", "label": "SB"}, {"id": "1", "label": "HD"}],
+      "flabel": "KL"
+    })
+
+  G('hm',
+    {"id": "0", "label": "—", "children": [], "secondary": []},
+    {
+      "id": "1",
+      "label": "Men",
+      "flabel": "DF",
+      "children": [],
+      "secondary": []
+    },
+    {
+      "id": "2",
+      "label": "vad",
+      "flabel": "OO",
+      "children": [],
+      "secondary": []
+    },
+    {
+      "id": "3",
+      "label": "ska",
+      "flabel": "HD",
+      "children": [],
+      "secondary": []
+    },
+    {
+      "id": "4",
+      "label": "jag",
+      "flabel": "SB",
+      "children": [],
+      "secondary": []
+    },
+    {"id": "5", "label": "då", "flabel": "MD", "children": [], "secondary": []},
+    {"id": "6", "label": "ta", "flabel": "ME", "children": [], "secondary": []},
+    {
+      "id": "7",
+      "label": "mej",
+      "flabel": "OO",
+      "children": [],
+      "secondary": []
+    },
+    {
+      "id": "8",
+      "label": "till",
+      "flabel": "HD",
+      "children": [],
+      "secondary": []
+    },
+    {"id": "9", "label": "!", "children": [], "secondary": []},
+    {
+      "id": "10",
+      "label": "VBM",
+      "children": ["6"],
+      "secondary": [{"id": "8", "label": "ME"}, {"id": "7", "label": "ME"}],
+      "flabel": "HD"
+    },
+    {
+      "id": "11",
+      "label": "VP",
+      "children": ["13", "10", "7"],
+      "secondary": [{"id": "4", "label": "SB"}],
+      "flabel": "IV"
+    },
+    {
+      "id": "12",
+      "label": "S",
+      "children": ["1", "11", "3", "4", "5"],
+      "secondary": []
+    },
+    {
+      "id": "13",
+      "label": "PP",
+      "children": ["2", "8"],
+      "secondary": [],
+      "flabel": "OA"
+    }
+  )
+
+  G('76 116',
+    {"id": "0", "label": "Ni", "flabel": "SB", "children": [], "secondary": []},
+    {
+      "id": "1",
+      "label": "kommer",
+      "flabel": "HD",
+      "children": [],
+      "secondary": []
+    },
+    {
+      "id": "2",
+      "label": "att",
+      "flabel": "HD",
+      "children": [],
+      "secondary": []
+    },
+    {"id": "3", "label": "bo", "flabel": "HD", "children": [], "secondary": []},
+    {"id": "4", "label": "i", "flabel": "HD", "children": [], "secondary": []},
+    {
+      "id": "5",
+      "label": "mitt",
+      "flabel": "DT",
+      "children": [],
+      "secondary": []
+    },
+    {
+      "id": "6",
+      "label": "hus",
+      "flabel": "HD",
+      "children": [],
+      "secondary": []
+    },
+    {"id": "7", "label": "så", "flabel": "ME", "children": [], "secondary": []},
+    {
+      "id": "8",
+      "label": "länge",
+      "flabel": "HD",
+      "children": [],
+      "secondary": []
+    },
+    {"id": "9", "label": "ni", "flabel": "SB", "children": [], "secondary": []},
+    {
+      "id": "10",
+      "label": "är",
+      "flabel": "HD",
+      "children": [],
+      "secondary": []
+    },
+    {"id": "11", "label": "i", "flabel": "HD", "children": [], "secondary": []},
+    {
+      "id": "12",
+      "label": "Kaimana",
+      "flabel": "OO",
+      "children": [],
+      "secondary": []
+    },
+    {"id": "13", "label": ",", "children": [], "secondary": []},
+    {
+      "id": "14",
+      "label": "jag",
+      "flabel": "SB",
+      "children": [],
+      "secondary": []
+    },
+    {
+      "id": "15",
+      "label": "ska",
+      "flabel": "HD",
+      "children": [],
+      "secondary": []
+    },
+    {
+      "id": "16",
+      "label": "nog",
+      "flabel": "MD",
+      "children": [],
+      "secondary": []
+    },
+    {
+      "id": "17",
+      "label": "ordna",
+      "flabel": "HD",
+      "children": [],
+      "secondary": []
+    },
+    {
+      "id": "18",
+      "label": "den",
+      "flabel": "DT",
+      "children": [],
+      "secondary": []
+    },
+    {
+      "id": "19",
+      "label": "saken",
+      "flabel": "HD",
+      "children": [],
+      "secondary": []
+    },
+    {"id": "20", "label": ",", "children": [], "secondary": []},
+    {
+      "id": "21",
+      "label": "men",
+      "flabel": "PH",
+      "children": [],
+      "secondary": []
+    },
+    {
+      "id": "22",
+      "label": "nu",
+      "flabel": "MD",
+      "children": [],
+      "secondary": []
+    },
+    {
+      "id": "23",
+      "label": "ska",
+      "flabel": "HD",
+      "children": [],
+      "secondary": []
+    },
+    {
+      "id": "24",
+      "label": "vi",
+      "flabel": "SB",
+      "children": [],
+      "secondary": []
+    },
+    {
+      "id": "25",
+      "label": "ombord",
+      "flabel": "RA",
+      "children": [],
+      "secondary": []
+    },
+    {
+      "id": "26",
+      "label": "och",
+      "flabel": "PH",
+      "children": [],
+      "secondary": []
+    },
+    {
+      "id": "27",
+      "label": "äta",
+      "flabel": "HD",
+      "children": [],
+      "secondary": []
+    },
+    {
+      "id": "28",
+      "label": "det",
+      "flabel": "DT",
+      "children": [],
+      "secondary": []
+    },
+    {
+      "id": "29",
+      "label": "sista",
+      "flabel": "HD",
+      "children": [],
+      "secondary": []
+    },
+    {
+      "id": "30",
+      "label": "civiliserade",
+      "flabel": "MD",
+      "children": [],
+      "secondary": []
+    },
+    {
+      "id": "31",
+      "label": "mål",
+      "flabel": "HD",
+      "children": [],
+      "secondary": []
+    },
+    {
+      "id": "32",
+      "label": "mat",
+      "flabel": "HD",
+      "children": [],
+      "secondary": []
+    },
+    {
+      "id": "33",
+      "label": "ni",
+      "flabel": "SB",
+      "children": [],
+      "secondary": []
+    },
+    {
+      "id": "34",
+      "label": "får",
+      "flabel": "HD",
+      "children": [],
+      "secondary": []
+    },
+    {
+      "id": "35",
+      "label": "på",
+      "flabel": "HD",
+      "children": [],
+      "secondary": []
+    },
+    {
+      "id": "36",
+      "label": "två",
+      "flabel": "DT",
+      "children": [],
+      "secondary": []
+    },
+    {
+      "id": "37",
+      "label": "månader",
+      "flabel": "HD",
+      "children": [],
+      "secondary": []
+    },
+    {"id": "38", "label": ".", "children": [], "secondary": []},
+    {
+      "id": "39",
+      "label": "NP",
+      "children": ["18", "19"],
+      "secondary": [],
+      "flabel": "OO"
+    },
+    {
+      "id": "40",
+      "label": "VP",
+      "children": ["17", "39"],
+      "secondary": [{"id": "14", "label": "SB"}],
+      "flabel": "IV"
+    },
+    {
+      "id": "41",
+      "label": "S",
+      "children": ["14", "15", "16", "40"],
+      "secondary": [],
+      "flabel": "DF"
+    },
+    {
+      "id": "42",
+      "label": "PP",
+      "children": ["11", "12"],
+      "secondary": [],
+      "flabel": "RA"
+    },
+    {
+      "id": "43",
+      "label": "ABM",
+      "children": ["7"],
+      "secondary": [{"id": "8", "label": "ME"}],
+      "flabel": "MD"
+    },
+    {
+      "id": "44",
+      "label": "S",
+      "children": ["9", "10", "42"],
+      "secondary": [],
+      "flabel": "OO"
+    },
+    {
+      "id": "45",
+      "label": "NP",
+      "children": ["5", "6"],
+      "secondary": [],
+      "flabel": "OO"
+    },
+    {
+      "id": "46",
+      "label": "PP",
+      "children": ["4", "45"],
+      "secondary": [],
+      "flabel": "RA"
+    },
+    {
+      "id": "47",
+      "label": "VP",
+      "children": ["3", "46", "62"],
+      "secondary": [{"id": "0", "label": "SB"}],
+      "flabel": "OO"
+    },
+    {
+      "id": "48",
+      "label": "S",
+      "children": ["0", "1", "58", "41"],
+      "secondary": [],
+      "flabel": "KL"
+    },
+    {
+      "id": "49",
+      "label": "NP",
+      "children": ["36", "37"],
+      "secondary": [],
+      "flabel": "OO"
+    },
+    {
+      "id": "50",
+      "label": "PP",
+      "children": ["35", "49"],
+      "secondary": [],
+      "flabel": "MD"
+    },
+    {
+      "id": "51",
+      "label": "S",
+      "children": ["33", "34"],
+      "secondary": [{"id": "32", "label": "OO"}],
+      "flabel": "MD"
+    },
+    {
+      "id": "52",
+      "label": "NP",
+      "children": ["28", "59", "30", "31", "60"],
+      "secondary": [],
+      "flabel": "OO"
+    },
+    {
+      "id": "53",
+      "label": "VP",
+      "children": ["27", "52"],
+      "secondary": [{"id": "24", "label": "SB"}],
+      "flabel": "IV"
+    },
+    {
+      "id": "54",
+      "label": "S",
+      "children": ["22", "23", "24", "25"],
+      "secondary": [],
+      "flabel": "KL"
+    },
+    {
+      "id": "55",
+      "label": "KoP",
+      "children": ["54", "26", "56"],
+      "secondary": [],
+      "flabel": "KL"
+    },
+    {
+      "id": "56",
+      "label": "S",
+      "children": ["53"],
+      "secondary": [
+        {"id": "22", "label": "MD"},
+        {"id": "24", "label": "SB"},
+        {"id": "23", "label": "HD"}
+      ],
+      "flabel": "KL"
+    },
+    {
+      "id": "57",
+      "label": "KoP",
+      "children": ["48", "21", "55"],
+      "secondary": []
+    },
+    {
+      "id": "58",
+      "label": "SuP",
+      "children": ["2", "47"],
+      "secondary": [],
+      "flabel": "IV"
+    },
+    {
+      "id": "59",
+      "label": "AjP",
+      "children": ["29", "50"],
+      "secondary": [],
+      "flabel": "MD"
+    },
+    {
+      "id": "60",
+      "label": "NP",
+      "children": ["32", "51"],
+      "secondary": [],
+      "flabel": "MD"
+    },
+    {
+      "id": "61",
+      "label": "AbP",
+      "children": ["43", "8"],
+      "secondary": [],
+      "flabel": "PH"
+    },
+    {
+      "id": "62",
+      "label": "SuP",
+      "children": ["61", "44"],
+      "secondary": [],
+      "flabel": "MD"
+    }
   )
 
   break boo
@@ -1144,6 +1842,7 @@ if (true) {
 }
 
 function xmlToSpec(romaner: string) {
+  // return []
     const p = new DOMParser()
     console.time('parse')
     const xml = p.parseFromString(romaner, 'text/xml')
@@ -1156,26 +1855,22 @@ function xmlToSpec(romaner: string) {
       const $ = (base: Element, q: string) => Array.from(base.querySelectorAll(q))
       let found = 0
       for (let i = 0; i < sents.length; ++i) {
-        const spec = {} as Record<string, SpecEntry>
+        const spec = {} as Record<string, SpecEntry<string>>
         const s = sents[i]
         const no_secedge = $(s, 'secedge').length == 0
         const no_discont = $(s, '[discontinuous="true"]').length == 0
         const long_sent = $(s, 't').length > 12
-        // if ((no_discont) || long_sent) {
-        //   continue
-        // }
-        if (found++ > 15) {
+        if (no_secedge) continue
+        if (!long_sent) continue
+        // if (no_discont) continue
+        if (++found > 100) {
           break
         }
         const terminals  = $(s, 't')
         const nonterminals = $(s, 'nt')
-        const simp = (x: string) => {
-          const m = x.match(/[^\d]*(.*)$/)
-          return m && m[1] || x
-        }
         terminals.forEach(t => {
           // console.log(t, t.attributes)
-          const id = simp(t.attributes.id.value)
+          const id = t.attributes.id.value
           spec[id] = {
             id,
             label: t.attributes.word.value
@@ -1184,14 +1879,20 @@ function xmlToSpec(romaner: string) {
         const flabels = {} as Record<string, string>
         nonterminals.forEach(nt => {
           // console.log(nt, nt.attributes)
-          const id = simp(nt.attributes.id.value)
+          const id = nt.attributes.id.value
           spec[id] = {
             id,
             label: nt.attributes.cat.value,
             children: $(nt, 'edge').map(edge => {
-              const child_id = simp(edge.attributes.idref.value)
+              const child_id = edge.attributes.idref.value
               flabels[child_id] = edge.attributes.label.value
               return child_id
+            }),
+            secondary: $(nt, 'secedge').map(edge => {
+              return {
+                id: edge.attributes.idref.value,
+                label: edge.attributes.label.value
+              }
             })
           }
         })
@@ -1199,11 +1900,13 @@ function xmlToSpec(romaner: string) {
           // console.log(spec, id, flabel)
           spec[id].flabel = flabel
         })
+        const final = renumber(Object.values(spec))
+        // console.log(pretty(final))
         specs.push({
           name: `${found} ${i}`
           // + `\n${new XMLSerializer().serializeToString(s)}`
           ,
-          spec: Object.values(spec)
+          spec: final
         })
       }
     }
