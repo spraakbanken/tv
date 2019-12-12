@@ -147,7 +147,7 @@ export const mousewheel = Handler('mousewheel')
 export const scroll     = Handler('scroll')
 export const click      = Handler('click')
 
-export function class_cache(class_prefix='c') {
+export function make_class_cache(class_prefix='c') {
   const generated = new Map()
   const lines = []
 
@@ -168,6 +168,14 @@ export function class_cache(class_prefix='c') {
   const css = forward(template_to_string, s => generate_class(s, () => s))
 
   return {sheet: () => Tag('style', lines), css, generate_class}
+}
+
+const caches = {}
+export function class_cache(class_prefix='c') {
+  if (!caches[class_prefix]) {
+    caches[class_prefix] = make_class_cache(class_prefix)
+  }
+  return caches[class_prefix]
 }
 
 function test_domdiff() {

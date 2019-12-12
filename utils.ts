@@ -1,4 +1,4 @@
-import {test, test_eval} from "./test.ts"
+import {test} from "./test.ts"
 
 export function maybe<A, B>(x?: A, z: B, f: (a: A) => B): B {
   return x === undefined ? z : f(x)
@@ -24,28 +24,50 @@ export function words(s: string): string[] {
 
 test(words, ' apa bepa cepa ').is = ['apa', 'bepa', 'cepa']
 
-export function group<A, B>(xs: A[], f: (a: A) => B): A[][] {
+export function group<A, B>(xs: A[], f: (a: A) => B, free?: (a: A) => boolean): A[][] {
   if (xs.length == 0) {
     return []
   }
   const out = [] as A[][]
+  let free_cursor: A[] = []
   let cursor: A[]
   let last: string
   xs.forEach(x => {
     const fx = f(x)
-    const now = JSON.stringify([fx === undefined, fx])
-    if (now !== last) {
-      cursor = []
-      out.push(cursor)
+    if (free && free(x)) {
+      free_cursor.push(x)
+    } else {
+      const now = JSON.stringify([fx === undefined, fx])
+      if (now !== last) {
+        if (free_cursor.length) {
+          out.push(free_cursor)
+          free_cursor = []
+        }
+        cursor = []
+        out.push(cursor)
+      } else {
+        cursor.push(...free_cursor)
+        free_cursor = []
+      }
+      last = now
+      cursor.push(x)
     }
-    cursor.push(x)
-    last = now
   })
+  if (free_cursor.length) {
+    out.push(free_cursor)
+  }
   return out
 }
 
 test(group, [], (x: string) => x).is = []
 test(group, [1, 2, 3, 4, 5, 6], (x: number) => Math.floor(x / 2)).is = [[1], [2, 3], [4, 5], [6]]
+test(group, [0, 1, 2, 3, 4, 5, 6, 7, 8], (x: number) => x < 3.5, (x: number) => x % 2 == 0).is = [
+  [0],
+  [1, 2, 3],
+  [4],
+  [5, 6, 7],
+  [8],
+]
 
 export function mapObject<K extends string, A, B>
     (obj: Record<K, A>, f: (k: K, v: A, i: number) => B): B[] {
@@ -186,3 +208,16 @@ export function sum(xs: number[]): number {
 }
 
 test(sum, [1, 2, 30]).is = 33
+
+export function* take<A>(n: number, xs: Iterable<A>): Generator<A> {
+  let i = 0
+  if (i >= n) return
+  for (const x of xs) {
+    yield x
+    i++
+    if (i >= n) return
+  }
+}
+
+test(Array.from, take(2, [0, 1, 2, 3, 4])).is = [0, 1]
+test(Array.from, take(2, [0])).is = [0]
