@@ -22,31 +22,9 @@ export function Thunk(key, create) {
   }
 }
 
-// when a node is .removeChild or even .insertBefore it loses its scroll
-// so we store it first so we can restore it later
-function storeScroll(node) {
-  if (node.childNodes) {
-    node.childNodes.forEach(storeScroll)
-  }
-  node.storedScrollTop = node.scrollTop
-  node.storedScrollLeft = node.scrollLeft
-}
-
-function restoreScroll(node) {
-  if (node.childNodes) {
-    node.childNodes.forEach(restoreScroll)
-  }
-  node.scrollTop = node.storedScrollTop
-  node.scrollLeft = node.storedScrollLeft
-  delete node.storedScrollTop
-  delete node.storedScrollLeft
-}
-
 export function Tag(name, children) {
   const next_attrs = {}
   const next_handlers = {}
-  const next_hooks = {}
-  let my_key = undefined
   children = children.filter(function filter_child(child) {
     if (!child) return false
     const type = typeof child
@@ -66,17 +44,6 @@ export function Tag(name, children) {
         next_handlers[handler] = [value]
       }
       return false
-    } else if (type == 'object' && child.hook) {
-      const {hook, value} = child
-      if (hook in next_hooks) {
-        next_hooks[hook].push(value)
-      } else {
-        next_hooks[hook] = [value]
-      }
-      return false
-    } else if (type == 'object' && child.key) {
-      my_key = child.key
-      return false
     } else if (isElement(child) && !child.foreign) {
       throw new Error('DOM Element children needs to have prop foreign set to true')
     } else if (child && type != 'string' && type != 'function' && !isElement(child)) {
@@ -85,10 +52,7 @@ export function Tag(name, children) {
     return child
   })
 
-  const next_keys = Object.fromEntries(children.filter(ch => ch.key).map(ch => [ch.key, true]))
-  const any_next_keys = Object.keys(next_keys).length > 0
-
-  function morph(elem, ns) {
+  return function morph(elem, ns) {
     if (name == 'svg') {
       ns = 'http://www.w3.org/2000/svg'
     }
@@ -127,24 +91,11 @@ export function Tag(name, children) {
       }
       elem.handlers[type] = next_handlers[type]
     }
-
-    const prev_nodes = {}
-    if (any_next_keys) {
-      elem.childNodes.forEach(child => {
-        if (child.key && child.key in next_keys) {
-          storeScroll(child)
-          prev_nodes[child.key] = child
-          elem.removeChild(child)
-        }
-      })
+    while (elem.childNodes.length > children.length) {
+      elem.removeChild(elem.lastChild)
     }
-
     for (let i = 0; i < children.length; ++i) {
       const child = children[i]
-      if (child.key in prev_nodes) {
-        elem.insertBefore(prev_nodes[child.key], elem.childNodes[i] || null)
-        restoreScroll(prev_nodes[child.key])
-      }
       if (i < elem.childNodes.length) {
         const prev = elem.childNodes[i]
         let next = child
@@ -164,19 +115,8 @@ export function Tag(name, children) {
         elem.append(typeof child == 'function' ? child(null, ns) : child)
       }
     }
-    while (elem.childNodes.length > children.length) {
-      elem.removeChild(elem.lastChild)
-    }
-    if (next_hooks.create) {
-      next_hooks.create.forEach(k => k(elem))
-    }
-    elem.key = my_key
     return elem
   }
-  if (my_key) {
-    morph.key = my_key
-  }
-  return morph
 }
 
 export const MakeTag = name => (...children) => Tag(name, children)
@@ -232,10 +172,10 @@ export function class_cache(class_prefix='c') {
   const generated = new Map()
   const lines = []
 
-  function generate_class(key, gen_code, name=undefined) {
+  function generate_class(key, gen_code) {
     if (!generated.has(key)) {
       const code = gen_code().trim().replace(/\n\s*/g, '\n').replace(/[:{;]\s*/g, g => g[0])
-      name = name || class_prefix + generated.size // + '_' + code.trim().replace(/[^\w\d_-]+/g, '_')
+      const name = class_prefix + generated.size // + '_' + code.trim().replace(/[^\w\d_-]+/g, '_')
       generated.set(key, name)
       if (-1 == code.search('{')) {
         lines.push(`.${name} {${code}}\n`)
