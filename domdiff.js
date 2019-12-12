@@ -1,5 +1,3 @@
-const isElement = x => x instanceof Element
-
 function template_to_string(value, ...more) {
   if (typeof value == 'string') {
     return value
@@ -9,17 +7,6 @@ function template_to_string(value, ...more) {
 
 function forward(f, g) {
   return (...args) => g(f(...args))
-}
-
-export function Thunk(key, create) {
-  key = JSON.stringify(key)
-  return function thunk(elem) {
-    if (!elem || !isElement(elem) || elem.key != key) {
-      elem = create()(elem)
-      elem.key = key
-    }
-    return elem
-  }
 }
 
 export function Tag(name, children) {
@@ -44,9 +31,7 @@ export function Tag(name, children) {
         next_handlers[handler] = [value]
       }
       return false
-    } else if (isElement(child) && !child.foreign) {
-      throw new Error('DOM Element children needs to have prop foreign set to true')
-    } else if (child && type != 'string' && type != 'function' && !isElement(child)) {
+    } else if (child && type != 'string' && type != 'function') {
       throw new Error('Child needs to be false, string, function or DOM Element')
     }
     return child
@@ -56,15 +41,14 @@ export function Tag(name, children) {
     if (name == 'svg') {
       ns = 'http://www.w3.org/2000/svg'
     }
-    if (!elem || !isElement(elem) || elem.tagName != name.toUpperCase() || elem.foreign) {
-      // need to create a new node if this is a FOREIGN OBJECT
+    if (!elem || elem.tagName != name.toUpperCase()) {
       if (ns) {
         elem = document.createElementNS(ns, name)
       } else {
         elem = document.createElement(name)
       }
     }
-    for (const attr of elem.attributes) {
+    for (const attr of [...elem.attributes]) {
       if (!next_attrs[attr.name]) {
         elem.removeAttribute(attr.name)
       }
@@ -163,11 +147,6 @@ export const mousewheel = Handler('mousewheel')
 export const scroll     = Handler('scroll')
 export const click      = Handler('click')
 
-export const Hook = hook => value => ({hook, value})
-export const hook_create = Hook('create')
-
-export const key = key => ({key})
-
 export function class_cache(class_prefix='c') {
   const generated = new Map()
   const lines = []
@@ -175,7 +154,7 @@ export function class_cache(class_prefix='c') {
   function generate_class(key, gen_code) {
     if (!generated.has(key)) {
       const code = gen_code().trim().replace(/\n\s*/g, '\n').replace(/[:{;]\s*/g, g => g[0])
-      const name = class_prefix + generated.size // + '_' + code.trim().replace(/[^\w\d_-]+/g, '_')
+      const name = class_prefix + generated.size
       generated.set(key, name)
       if (-1 == code.search('{')) {
         lines.push(`.${name} {${code}}\n`)
@@ -191,35 +170,65 @@ export function class_cache(class_prefix='c') {
   return {sheet: () => Tag('style', lines), css, generate_class}
 }
 
-function test_morphdom() {
-  const tag = (name, ...children) => Tag(name, children)
+function test_domdiff() {
   const tests = [
-    tag('div', cls`boo`, tag('pre', id`heh`, 'hello')),
-    tag('div', style`background: black`, 'hello'),
-    tag('div', cls`foo`, 'hello', tag('h1', 'heh')),
-    tag('div', cls`foo`, 'hello', tag('h2', 'heh')),
-    tag('div', cls`foo`, 'hello', tag('h2', 'meh')),
-    tag('span', tag('h1', 'a'), tag('h2', 'b')),
-    tag('span', tag('h1', 'a'), tag('h3', 'b')),
-    tag('span', tag('h2', 'a'), tag('h3', 'b')),
-    tag('span', tag('h2', 'a'), 'zoo', tag('h3', 'b')),
-    tag('span', cls`z`, id`g`, tag('h2', 'a'), 'zoo', tag('h3', 'b')),
-    tag('span', tag('h2', 'a'), 'zoo', tag('h3', 'b')),
-    tag('span', tag('h2', 'a'), 'zoo', tag('h3', 'boo')),
-    tag('span', 'apa'),
-    tag('span', tag('div', 'apa')),
-    tag('span', cls`a`),
-    tag('span', cls`b`),
+    div(cls`boo`, pre(id`heh`, 'hello')),
+    div(cls`foo`, 'hello', h1('heh')),
+    div(cls`foo`, 'hello', h2('heh')),
+    div(cls`foo`, 'hello', h2('meh')),
+    div(style`background: black`, 'hello'),
+    span(),
+    span(false),
+    span(null),
+    span(undefined),
+    span(click(e => 1)),
+    span(scroll(e => 3), click(e => 1)),
+    span('apa'),
+    span(cls`a`),
+    span(cls`b`),
+    span(div('apa')),
+    span(h1('a'), h2('b')),
+    span(h1('a'), h3('b')),
+    span(h2('a'), h3('b')),
+    span(h2('a'), 'zoo', h3('b')),
+    span(h2('a'), 'zoo', h3('b')),
+    span(h2('a'), 'zoo', h3('boo')),
+    span(cls`z`, id`g`, h2('a'), 'zoo', h3('b')),
+    span(cls`z`, style`color: red`, id`g`),
+    span(style`color: red`, id`g`),
+    span(style`color: red`, id`g`, cls`z`),
   ]
 
-  let now = undefined
-  console.group()
-  tests.forEach((morph, i) => {
-    now = morph(now)
-    console.log(now.outerHTML)
+  function equal(doms) {
+    const htmls = {}
+    Object.keys(doms).forEach(k1 => {
+      Object.keys(doms).forEach(k2 => {
+        if (k1 < k2) {
+          const doms1 = doms[k1]
+          const doms2 = doms[k2]
+          const html1 = doms[k1].outerHTML
+          const html2 = doms[k2].outerHTML
+          console.assert(doms1.isEqualNode(doms2), {[k1]: html1, [k2]: html2})
+        }
+      })
+    })
+  }
+
+  tests.forEach((a, i) => {
+    equal({
+      scratch: a(),
+      idem: a(a()),
+    })
+    tests.forEach((b, i) => {
+      equal({
+        scratch: a(),
+        btoa: a(b()),
+      })
+    })
   })
-  console.groupEnd()
 }
 
-// test_morphdom()
+console.time('test domdiff')
+test_domdiff()
+console.timeEnd('test domdiff')
 
