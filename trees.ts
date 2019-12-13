@@ -32,6 +32,24 @@ export interface SpecEntry<A> {
   only?: string
 }
 
+export function renumber<A>(spec: Spec<A>): Spec<A> {
+  const ids: Record<string, string> = {}
+  const next_id = utils.id_supply()
+  spec.forEach(x => {
+    if (x.id && !(x.id in ids)) {
+      ids[x.id] = next_id()
+    }
+  })
+  return spec.map(x => {
+    return {
+      ...x,
+      id: ids[x.id],
+      children: (x.children || []).map(z => ids[z]),
+      secondary: (x.secondary || []).map(z => ({...z, id: ids[z.id]}))
+    }
+  })
+}
+
 type Diff = (e?: Element) => Element
 
 interface Rect {
@@ -99,10 +117,7 @@ function Graphics(
 ) {
   const opts = {...default_options, ...options}
 
-  const next_id = (() => {
-    let id = 0
-    return () => id+++''
-  })()
+  const next_id = utils.id_supply()
 
   let row: Block[] = []
   const blocks: Record<id, Block> = {}
@@ -699,22 +714,5 @@ export const G = (name: string | number, ...spec0: Spec<string | undefined>) => 
       css`font-size: 17px`
     ),
   )
-}
-
-export function renumber<A>(obj: Spec<A>): Spec<A> {
-  const ids: Record<string, string> = {}
-  obj.forEach(x => {
-    if (x.id && !(x.id in ids)) {
-      ids[x.id] = Object.keys(ids).length + ''
-    }
-  })
-  return obj.map(x => {
-    return {
-      ...x,
-      id: ids[x.id],
-      children: (x.children || []).map(z => ids[z]),
-      secondary: (x.secondary || []).map(z => ({...z, id: ids[z.id]}))
-    }
-  })
 }
 

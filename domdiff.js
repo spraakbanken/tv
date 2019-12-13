@@ -1,41 +1,30 @@
-function template_to_string(value, ...more) {
-  if (typeof value == 'string') {
-    return value
-  }
-  return value.map((s, i) => s + (more[i] === undefined ? '' : more[i])).join('')
-}
-
-function forward(f, g) {
-  return (...args) => g(f(...args))
-}
-
 export function Tag(name, children) {
   const next_attrs = {}
-  const next_handlers = {}
   children = children.filter(function filter_child(child) {
     if (!child) return false
     const type = typeof child
-    if (type == 'object' && child.attr) {
-      const {attr, value} = child
-      if (attr in next_attrs) {
-        next_attrs[attr] += ' ' + value
-      } else {
-        next_attrs[attr] = value
-      }
-      return false
-    } else if (type == 'object' && child.handler) {
-      const {handler, value} = child
-      if (handler in next_handlers) {
-        next_handlers[handler].push(value)
-      } else {
-        next_handlers[handler] = [value]
+    if (type == 'object') {
+      for (const k in child) {
+        if (!(k in next_attrs)) {
+          next_attrs[k] = []
+        }
+        next_attrs[k].push(child[k])
       }
       return false
     } else if (child && type != 'string' && type != 'function') {
-      throw new Error('Child needs to be false, string, function or DOM Element')
+      throw new Error(`Child to ${name} needs to be false, string or function (is ${child} with type ${type})`)
     }
     return child
   })
+
+  for (const k in next_attrs) {
+    if (k[0] == 'o' && k[1] == 'n') {
+      const cbs = [...next_attrs[k]]
+      next_attrs[k] = e => cbs.forEach(cb => cb(e))
+    } else {
+      next_attrs[k] = next_attrs[k].join(' ')
+    }
+  }
 
   return function morph(elem, ns) {
     if (name == 'svg') {
@@ -49,31 +38,29 @@ export function Tag(name, children) {
       }
     }
     for (const attr of [...elem.attributes]) {
-      if (!next_attrs[attr.name]) {
-        elem.removeAttribute(attr.name)
+      const k = attr.name
+      if (!next_attrs[k]) {
+        elem.removeAttribute(k)
       }
     }
-    for (const attr in next_attrs) {
-      const now = elem.getAttribute(attr) || ''
-      const next = next_attrs[attr] || ''
+    for (const k in elem.listeners || {}) {
+      if (!next_attrs[k]) {
+        elem[k] = undefined
+        delete elem.listeners[k]
+      }
+    }
+    for (const k in next_attrs) {
+      const now = elem[k] || ''
+      const next = next_attrs[k] || ''
       if (now != next && next) {
-        elem.setAttribute(attr, next)
+        if (k[0] == 'o' && k[1] == 'n') {
+          elem[k] = next
+          elem.listeners = elem.listeners || {}
+          elem.listeners[k] = true
+        } else {
+          elem.setAttribute(k, next)
+        }
       }
-    }
-    if (elem.handlers === undefined) {
-      elem.handlers = {}
-    }
-    for (const type in elem.handlers) {
-      if (!next_handlers[type]) {
-        elem.handlers[type] = undefined
-        elem['on' + type] = undefined
-      }
-    }
-    for (const type in next_handlers) {
-      if (!elem.handlers[type]) {
-        elem['on' + type] = e => e.currentTarget.handlers[type].forEach(h => h(e))
-      }
-      elem.handlers[type] = next_handlers[type]
     }
     while (elem.childNodes.length > children.length) {
       elem.removeChild(elem.lastChild)
@@ -103,6 +90,17 @@ export function Tag(name, children) {
   }
 }
 
+function template_to_string(value, ...more) {
+  if (typeof value == 'string' || typeof value == 'number') {
+    return value
+  }
+  return value.map((s, i) => s + (more[i] === undefined ? '' : more[i])).join('')
+}
+
+function forward(f, g) {
+  return (...args) => g(f(...args))
+}
+
 export const MakeTag = name => (...children) => Tag(name, children)
 export const div = MakeTag('div')
 export const pre = MakeTag('pre')
@@ -128,24 +126,31 @@ export const tr = MakeTag('tr')
 export const td = MakeTag('td')
 export const th = MakeTag('th')
 
+export const select = MakeTag('select')
+export const button = MakeTag('button')
+export const input = MakeTag('input')
+export const datalist = MakeTag('datalist')
+export const option = MakeTag('option')
+
+export const textarea = MakeTag('textarea')
 export const a = MakeTag('a')
 
-export const MakeAttr = attr => forward(template_to_string, value => ({attr, value}))
+export const MakeAttr = attr => forward(template_to_string, value => ({[attr]: value}))
 
 export const style = MakeAttr('style')
 export const cls = MakeAttr('class')
 export const id = MakeAttr('id')
 export const href = MakeAttr('href')
+export const value = MakeAttr('value')
 
-export const Handler = handler => value => ({handler, value})
-
-export const mousemove  = Handler('mousemove')
-export const mouseover  = Handler('mouseover')
-export const mousedown  = Handler('mousedown')
-export const mouseup    = Handler('mouseup')
-export const mousewheel = Handler('mousewheel')
-export const scroll     = Handler('scroll')
-export const click      = Handler('click')
+export const onmousemove  = h => ({onmousemove: h})
+export const onmouseover  = h => ({onmouseover: h})
+export const onmousedown  = h => ({onmousedown: h})
+export const onmouseup    = h => ({onmouseup: h})
+export const onmousewheel = h => ({onmousewheel: h})
+export const onscroll     = h => ({onscroll: h})
+export const onclick      = h => ({onclick: h})
+export const oninput      = h => ({oninput: h})
 
 export function make_class_cache(class_prefix='c') {
   const generated = new Map()
@@ -162,7 +167,7 @@ export function make_class_cache(class_prefix='c') {
         lines.push(code.replace(/&/g, _ => `.${name}`) + '\n')
       }
     }
-    return {attr: 'class', value: generated.get(key)}
+    return {'class': generated.get(key)}
   }
 
   const css = forward(template_to_string, s => generate_class(s, () => s))
@@ -189,8 +194,8 @@ function test_domdiff() {
     span(false),
     span(null),
     span(undefined),
-    span(click(e => 1)),
-    span(scroll(e => 3), click(e => 1)),
+    span(onclick(e => 1)),
+    span(onscroll(e => 3), onclick(e => 1)),
     span('apa'),
     span(cls`a`),
     span(cls`b`),

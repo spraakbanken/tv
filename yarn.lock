@@ -4264,6 +4264,11 @@ rc@^1.2.7:
     minimist "^1.2.0"
     strip-json-comments "~2.0.1"
 
+reactive-lens@^0.5.0:
+  version "0.5.0"
+  resolved "https://registry.npmjs.org/reactive-lens/-/reactive-lens-0.5.0.tgz#6839e34757adc2f9196077c04e39f06f858bd925"
+  integrity sha1-aDnjR1etwvkZYHfATjnwb4WL2SU=
+
 readable-stream@^2.0.2, readable-stream@^2.0.6, readable-stream@^2.2.2, readable-stream@^2.3.3, readable-stream@^2.3.6, readable-stream@~2.3.3, readable-stream@~2.3.6:
   version "2.3.6"
   resolved "https://registry.npmjs.org/readable-stream/-/readable-stream-2.3.6.tgz#b11c27d88b8ff1fbe070643cf94b0c79ae1b0aaf"

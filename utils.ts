@@ -203,6 +203,28 @@ export function by<T extends Record<string, any>>(k: keyof T, xs: T[]): Record<s
   test(by, 'id', [a, b]).is = {a, b}
 }
 
+export function by_many<T extends Record<string, any>>(k: keyof T, xs: T[]): Record<string, T[]> {
+  const res: any = {}
+  xs.forEach(s => {
+    const sk = s[k]
+    if (!(sk in res)) {
+      res[sk] = new Set()
+    }
+    res[sk].add(s)
+  })
+  for (const k in res) {
+    res[k] = [...res[k].values()]
+  }
+  return res
+}
+
+{
+  const a = {id: 'a', v: 1}
+  const b = {id: 'a', w: 2}
+  test(by_many, 'id', [a, b]).is = {a: [a, b]}
+}
+
+
 export function sum(xs: number[]): number {
   return xs.reduce((a, b) => a + b, 0)
 }
@@ -221,3 +243,18 @@ export function* take<A>(n: number, xs: Iterable<A>): Generator<A> {
 
 test(Array.from, take(2, [0, 1, 2, 3, 4])).is = [0, 1]
 test(Array.from, take(2, [0])).is = [0]
+
+export const id_supply = () => {
+  let id = 0
+  return () => id+++''
+}
+
+{
+  const us = id_supply()
+  test(us).is = '0'
+  test(us).is = '1'
+  test(us).is = '2'
+  const us2 = id_supply()
+  test(us2).is = '0'
+  test(us).is = '3'
+}
