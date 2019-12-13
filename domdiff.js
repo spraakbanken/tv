@@ -90,14 +90,14 @@ export function Tag(name, children) {
   }
 }
 
-function template_to_string(value, ...more) {
+export function template_to_string(value, ...more) {
   if (typeof value == 'string' || typeof value == 'number') {
     return value
   }
   return value.map((s, i) => s + (more[i] === undefined ? '' : more[i])).join('')
 }
 
-function forward(f, g) {
+export function forward(f, g) {
   return (...args) => g(f(...args))
 }
 
@@ -172,7 +172,11 @@ export function make_class_cache(class_prefix='c') {
 
   const css = forward(template_to_string, s => generate_class(s, () => s))
 
-  return {sheet: () => Tag('style', lines), css, generate_class}
+  return {
+    sheet: () => Tag('style', lines),
+    css,
+    generate_class,
+  }
 }
 
 const caches = {}

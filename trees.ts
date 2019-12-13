@@ -692,6 +692,7 @@ export const G = (name: string | number, ...spec0: Spec<string | undefined>) => 
   })
 
   return div(
+    graphics.draw(),
     // css`
     //   display: flex;
     //   align-items: start;
@@ -702,17 +703,16 @@ export const G = (name: string | number, ...spec0: Spec<string | undefined>) => 
     //     overflow: auto;
     //   }
     // `,
-    graphics.draw(),
-    pre(msgs.join('\n'), css`font-size: 12px`),
-    pre(
-      css`display: none`,
-      name + '', '\n',
-      pretty({
-        spec: renumber(spec0) // : utils.topo(spec0),
-        // state, w, h
-      }),
-      css`font-size: 17px`
-    ),
+    // pre(msgs.join('\n'), css`font-size: 12px`),
+    // pre(
+    //   css`display: none`,
+    //   name + '', '\n',
+    //   pretty({
+    //     spec: renumber(spec0) // : utils.topo(spec0),
+    //     // state, w, h
+    //   }),
+    //   css`font-size: 17px`
+    // ),
   )
 }
 

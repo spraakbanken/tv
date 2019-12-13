@@ -258,3 +258,17 @@ export const id_supply = () => {
   test(us2).is = '0'
   test(us).is = '3'
 }
+
+export const limit = <A extends Array<any>, B>(ms: number, f: (...args: A) => B) => {
+  let timer: number | undefined
+  let last_args: A
+  return (...args: A) => {
+    last_args = args
+    clearTimeout(timer)
+    timer = setTimeout(() => {
+      timer = undefined
+      f(...last_args)
+    }, ms)
+  }
+}
+
