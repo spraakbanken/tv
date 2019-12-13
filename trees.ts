@@ -691,8 +691,7 @@ export const G = (name: string | number, ...spec0: Spec<string | undefined>) => 
     }
   })
 
-  return div(
-    graphics.draw(),
+  return graphics.draw()
     // css`
     //   display: flex;
     //   align-items: start;
@@ -713,6 +712,6 @@ export const G = (name: string | number, ...spec0: Spec<string | undefined>) => 
     //   }),
     //   css`font-size: 17px`
     // ),
-  )
+
 }
 

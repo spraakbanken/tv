@@ -200,51 +200,86 @@ const current = store.at('current')
 
 body(
   div(
-    css`display: flex; flex-direction: row`,
-    css`& > * { margin: 0 10px }`,
-    with_ref(
-      (dom: HTMLInputElement) => dom.value = store.get().query,
-      input({
-        list: 'x',
-        placeholder: 'input query...',
-        autofocus: true,
-        oninput: utils.limit(250, (e: InputEvent) => {
-          if (!e.target || !(e.target instanceof HTMLInputElement)) return
-          const query = e.target.value as string
-          store.update({query})
+    css`display: inline-block`,
+    css`
+      &, & > * { display: inline-block; }
+      & > * > * { margin: 0 5px; }
+    `,
+    div(
+      with_ref(
+        (dom: HTMLInputElement) => dom.value = store.get().query,
+        input({
+          list: 'x',
+          placeholder: 'input query...',
+          autofocus: true,
+          oninput: utils.limit(250, (e: InputEvent) => {
+            if (!e.target || !(e.target instanceof HTMLInputElement)) return
+            const query = e.target.value as string
+            store.update({query})
+          }),
         }),
-      }),
+      ),
+      track(store.at('index'), index => datalist(
+        {id: 'x'},
+        ...Object.keys(index).sort().map(k => option(k))
+      )),
     ),
-    track(store.at('index'), index => datalist(
-      {id: 'x'},
-      ...Object.keys(index).sort().map(k => option(k))
-    )),
-    track(current, ({pos, sel, width}) => span(
-      width == 1
-        ? `${pos+1} of ${sel.length}`
-        : `${pos+1} to ${pos+width} of ${sel.length}`
-    )),
-    button('prev', { onclick: () => current.at('pos').modify(x => x - current.get().width) }),
-    button('next', { onclick: () => current.at('pos').modify(x => x + current.get().width) }),
-    'width:',
-    with_ref(
-      (dom: HTMLSelectElement) => dom.value = '' + current.get().width,
-      select(
-        ...[1, 2, 5, 10, 20, 50].map(x => option(x + '')),
-        {
-          oninput(e: InputEvent) {
-            if (!e.target || !(e.target instanceof HTMLSelectElement)) return
-            current.at('width').set(Number(e.target.value))
+    div(
+      track(current, ({pos, sel, width}) => span(
+        {id: 'boo'},
+        css`display: inline-block;`,
+        sel.length != 0 && (
+          width == 1
+            ? `${pos+1} of ${sel.length}`
+            : `${pos+1} to ${Math.min(pos+width, sel.length)} of ${sel.length}`
+        )
+      )),
+      button('prev', { onclick: () => current.at('pos').modify(x => Math.max(x - current.get().width, 0)) }),
+      button('next', { onclick: () => current.at('pos').modify(x => Math.min(x + current.get().width, current.get().sel.length - 1)) }),
+      'width:',
+      with_ref(
+        (dom: HTMLSelectElement) => dom.value = '' + current.get().width,
+        select(
+          ...[1, 2, 5, 10, 20, 50].map(x => option(x + '')),
+          {
+            oninput(e: InputEvent) {
+              if (!e.target || !(e.target instanceof HTMLSelectElement)) return
+              current.at('width').set(Number(e.target.value))
+            }
           }
-        }
-      )
+        )
+      ),
     ),
-    track(store.at('message'), span)
+    div(
+      track(store.at('message'), span)
+    )
   ),
   track(current, ({pos, sel, width}) => {
     const sl = sel.slice(pos, pos + width)
     console.time('trees')
-    const trees = sl.map(sent => G(sent.id, ...sent.spec))
+    const trees = sl.map(sent => div(
+      css`
+        border-top: 2px #e2e2e2 solid;
+        margin-top: 10px;
+        padding-top: 10px;
+        display: flex;
+        flex-direction: column;
+      `,
+      css`
+        & > * {
+          overflow: auto;
+          flex: 1;
+        }
+      `,
+      div(
+        sent.id,
+        css`
+          font-style: italic;
+          align-self: flex-end;
+        `
+      ),
+      div(G(sent.id, ...sent.spec))
+    ))
     console.timeEnd('trees')
     return div(
       sheet(),
