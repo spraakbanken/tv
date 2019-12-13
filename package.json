@@ -13,5 +13,10 @@
     "json-stringify-pretty-compact": "^2.0.0",
     "reactive-lens": "^0.5.0",
     "tinyqueue": "^2.0.3"
+  },
+  "scripts": {
+    "serve": "parcel index.html",
+    "build": "rm dist/* -rf; parcel build index.html --no-source-maps --public-url .; cp static/*xml dist",
+    "deploy": "yarn run build && scp dist/* dan@demo:/export/htdocs/dan/koala"
   }
 }
