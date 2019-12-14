@@ -17,6 +17,6 @@
   "scripts": {
     "serve": "parcel index.html",
     "build": "rm dist/* -rf; parcel build index.html --no-source-maps --public-url .; cp static/*xml dist",
-    "deploy": "yarn run build && scp dist/* dan@demo:/export/htdocs/dan/koala"
+    "deploy": "yarn run build && scp -p dist/* dan@demo:/export/htdocs/dan/koala"
   }
 }
