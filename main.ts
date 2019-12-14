@@ -6,7 +6,7 @@ import * as domdiff from "./domdiff.js"
 const {body, div, span, select, button, input, datalist, option, textarea} = domdiff
 const {css, sheet} = domdiff.class_cache()
 
-import {G, Spec} from "./trees"
+import {draw_tree, Spec} from "./trees"
 
 import {Store} from "reactive-lens"
 
@@ -47,7 +47,7 @@ function strs_of(x: any): string[] {
         rec(v)
       }
     } else if (typeof obj === 'string' && !obj.match(/^\d*$/)) {
-      out.push(obj)
+      out.push(...obj.split(' '))
     }
   }
 }
@@ -130,13 +130,15 @@ const koala_files: string[] = [
 ]
 
 async function load_koala() {
+  const sents: koala.Sentence[] = []
   for (const file of koala_files) {
     msg`loading ${file}...`
     const xml = await fetch(file)
     const text = await xml.text()
-    store.at('sents').modify(s => [...s, ...koala.parse_koala(text)])
+    sents.push(...koala.parse_koala(text))
   }
   msg`Eukalyptus loaded!`
+  store.update({sents})
 }
 
 import {examples} from "./examples"
@@ -145,11 +147,11 @@ import {examples} from "./examples"
   const {sents} = store.get()
   if (sents.length == 0) {
     load_koala()
-    if (koala_files.length == 0) {
-      store.update({
-        sents: examples.map(spec => ({example: true, spec})) as any
-      })
-    }
+  }
+  if (koala_files.length == 0) {
+    store.update({
+      sents: examples.map(spec => ({example: true, spec})) as any
+    })
   }
 }
 
@@ -278,7 +280,7 @@ body(
           align-self: flex-end;
         `
       ),
-      div(G(sent.id, ...sent.spec))
+      div(draw_tree(sent.spec))
     ))
     console.timeEnd('trees')
     return div(

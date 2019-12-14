@@ -7,7 +7,7 @@ export interface Box {
   y2: number
 }
 
-interface Point {
+export interface Point {
   x: number
   y: number
 }
@@ -41,7 +41,7 @@ function flip_point(p: Point): Point {
   return {x: p.y, y: p.x}
 }
 
-function points_of_box(b: Box): Point[] {
+export function points_of_box(b: Box): Point[] {
   const {x1, y1, x2, y2} = b
   return [
     {x: x1, y: y1},
@@ -53,10 +53,10 @@ function points_of_box(b: Box): Point[] {
 
 function lines_of_box(b: Box): Line[] {
   const {x1, y1, x2, y2} = b
-  const left  = Math.min(x1, x2),
-  const right = Math.max(x1, x2),
-  const bottom= Math.min(y1, y2),
-  const top   = Math.max(y1, y2),
+  const left  = Math.min(x1, x2)
+  const right = Math.max(x1, x2)
+  const bottom= Math.min(y1, y2)
+  const top   = Math.max(y1, y2)
   return [
     {tag: 'V', top, bottom, x: left},
     {tag: 'V', top, bottom, x: right},

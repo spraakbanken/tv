@@ -1,15 +1,13 @@
-import pretty from "json-stringify-pretty-compact"
-
-import {test} from "./test"
-
-import {euclidean_shortest_path, Box, scale_box} from "./euclidean_shortest_path"
+import {euclidean_shortest_path, Box, Point, scale_box, points_of_box} from "./euclidean_shortest_path"
 
 import {catmull_rom} from "./catmull_rom"
+
+import {default as pretty} from "json-stringify-pretty-compact"
 
 import * as utils from "./utils"
 
 import * as domdiff from "./domdiff.js"
-const {div, style, span, pre} = domdiff
+const {div, style, span} = domdiff
 const {css} = domdiff.class_cache()
 
 const svg = domdiff.MakeTag('svg')
@@ -112,7 +110,7 @@ interface Block {
   sealed: boolean
 }
 
-function Graphics(
+function Layout(
   options?: Partial<typeof default_options>
 ) {
   const opts = {...default_options, ...options}
@@ -231,8 +229,6 @@ function Graphics(
     const children_blocks = Array.from(children_id_remap.values()).map(id => blocks[id])
 
     function add_line_to_hbar(block: Block) {
-      // this is making the line up to the bar. do we need a new id here?
-      // we might if there are no flabels but sec-edges
       const old_top = block.top
       block.top = block.min_height
       block.contents.push({
@@ -256,6 +252,10 @@ function Graphics(
       block: b,
     }))
 
+    if (annotated_row.every(e => !e.mine)) {
+      throw new Error(`None of the children in ${children_ids} are in the active row`)
+    }
+
     const pregroups = utils.group(
       annotated_row,
       e => +e.mine + 2*+e.only,
@@ -278,7 +278,7 @@ function Graphics(
 
     const group = groups.sort((a, b) => b.score - a.score)[0]
 
-    const gblocks = group.blocks
+    const main_blocks = group.blocks
 
     let left_id = row[leftmost].id
     let right_id = row[rightmost].id
@@ -306,28 +306,28 @@ function Graphics(
       }
       add_line_to_hbar(block)
       if (secedge.right) {
-        if (gblocks[gblocks.length - 1].id == right_id) {
+        if (main_blocks[main_blocks.length - 1].id == right_id) {
           right_id = block.id
         }
-        gblocks.push(block)
+        main_blocks.push(block)
       } else {
-        if (gblocks[0].id == left_id) {
+        if (main_blocks[0].id == left_id) {
           left_id = block.id
         }
-        gblocks.unshift(block)
+        main_blocks.unshift(block)
       }
     })
 
     const id = next_id()
-    const right = utils.sum(gblocks.map(b => b.right))
-    const top = gblocks[0].top
+    const right = utils.sum(main_blocks.map(b => b.right))
+    const top = main_blocks[0].top
     const min_height = top
-    const leftmost_mid = gblocks[0].mid
+    const leftmost_mid = main_blocks[0].mid
 
     // this may be upgraded to an as narrow as possible horizonal concat
     let x = 0
     let rightmost_mid = 0
-    const contents: Content[] = gblocks.map(block => {
+    const contents: Content[] = main_blocks.map(block => {
       const d: Content = {
         tag: 'block',
         block,
@@ -348,8 +348,8 @@ function Graphics(
     })
     contents.push({
       tag: 'mainline',
-      left: gblocks[0].id,
-      right: gblocks[gblocks.length-1].id,
+      left: main_blocks[0].id,
+      right: main_blocks[main_blocks.length-1].id,
       height: top
     })
 
@@ -368,7 +368,7 @@ function Graphics(
     blocks[id] = block
 
     children_blocks.forEach(block => {
-      if (!gblocks.some(b => b.id == block.id)) {
+      if (!main_blocks.some(b => b.id == block.id)) {
         seal(block.id)
       }
     })
@@ -404,7 +404,7 @@ function Graphics(
   function draw() {
     const boxes: Box[] = []
     const children: Diff[] = []
-    const svg_children: Diff[] = []
+    const svg_children: (Diff | false)[] = []
 
     const mids: Record<string, number> = {}
     const tops: Record<string, number> = {}
@@ -416,7 +416,7 @@ function Graphics(
 
     let width = 0, height = 0
 
-    function rec(block: Block, x: number, y: number) {
+    function position_block(block: Block, x: number, y: number) {
       width = Math.max(width, x + block.right)
       height = Math.max(height, y + block.top)
       mids[block.id] = x + block.mid
@@ -426,7 +426,7 @@ function Graphics(
         if (c.tag == 'block') {
           const dx = x + (c.x || 0)
           const dy = y + (c.y || 0)
-          rec(c.block, dx, dy)
+          position_block(c.block, dx, dy)
         } else if (c.tag == 'diff') {
           const dx = x + (c.x || 0)
           const dy = y + (c.y || 0)
@@ -464,7 +464,7 @@ function Graphics(
     {
       let x = 0
       row.forEach(block => {
-        rec(block, x, 0)
+        position_block(block, x, 0)
         x += block.right
       })
     }
@@ -489,20 +489,19 @@ function Graphics(
 
     svg_children.reverse()
 
-    const str = p => `${p.x},${p.y}`
+    const draw_bounding_boxes = false
 
-    boxes.map(b => scale_box(b, 1, 1)).forEach(b => {
-      return
+    draw_bounding_boxes && boxes.map(b => scale_box(b, 1, 1)).forEach(b => {
+      const str = (p: Point) => `${p.x},${p.y}`
       svg_children.push(
         path(
-          d('M' + points_of_box(b).map(str).join(' L')),
-          css`stroke: blue; stroke-width: 1px; fill: none`
+          d('M' + points_of_box(b).map(str).join(' L') + ' Z'),
+          css`stroke: maroon; stroke-width: 1px; fill: none`
         )
       )
     })
 
     final_secs.forEach(sec => {
-
       const source = {
         x: mids[sec.source],
         y: bots[sec.source],
@@ -516,49 +515,15 @@ function Graphics(
       const esp = euclidean_shortest_path(source, target, boxes.map(b => scale_box(b, 1, 1)))
 
       if (esp) {
-        const p = esp.path.slice()
-        // const dy = (p: Point, y: number) => ({x: p.x , y: p.y + y})
-        // const l = p.length
-        // p.splice(l-1, 0, dy(p[l-1], 8))
-        // if (p[0].y - p[p.length-1].y < 20) {
-        //   p.splice(1, 0, dy(p[0], -10))
-        // }
-        // p.splice(1, 0, dy(p[0], -10))
-        // svg_children.push(
-        //   path(
-        //     d(catmull_rom(esp.path, 0.3)),
-        //     css`stroke: red; stroke-width: 2px; fill: none`
-        //   )
-        // )
-        // svg_children.push(
-        //   path(
-        //     d(catmull_rom(p, 0.6)),
-        //     css`stroke: #33f; stroke-width: 2px; fill: none`
-        //   )
-        // )
-        // svg_children.push(
-        //   path(
-        //     d(catmull_rom(p, 0.4)),
-        //     css`stroke: #66f; stroke-width: 2px; fill: none`
-        //   )
-        // )
         svg_children.push(
           path(
-            d(catmull_rom(p, 0.25)),
+            d(catmull_rom(esp.path, 0.25)),
             css`stroke: cornflowerblue; stroke-width: 2px; fill: none`
           )
         )
+      } else {
+        console.warn('Failed to route edge', sec, source, target)
       }
-
-      // esp && esp.path.forEach((p, i) => {
-      //   i != 0 && i != esp.path.length - 1 && boxes.push({
-      //     x1: p.x - 3,
-      //     y1: p.y - 3,
-      //     x2: p.x + 3,
-      //     y2: p.y + 3,
-      //   })
-      // })
-
     })
 
     const svg_lines = svg(
@@ -581,9 +546,6 @@ function Graphics(
 const try_span = (s?: string) => s ? span(style`white-space: pre; display: inline-block;`, s) : span(px({height: 0, width: 0}))
 
 function measure_spec(measure_root: Element, spec: Spec<string | undefined>): Spec<DiffWithRect> {
-
-  const spec_by_id = utils.by('id', spec)
-
   const p = {} as Record<string, Element>
 
   const position = (text: string) => {
@@ -603,8 +565,6 @@ function measure_spec(measure_root: Element, spec: Spec<string | undefined>): Sp
       secedge.label && position(secedge.label)
     })
   })
-
-
 
   function measure(text?: string) {
     if (text === undefined || text === '') {
@@ -639,19 +599,7 @@ function measure_spec(measure_root: Element, spec: Spec<string | undefined>): Sp
   return out_spec
 }
 
-export const G = (name: string | number, ...spec0: Spec<string | undefined>) => {
-  const spec = measure_spec(document.body, utils.toposort(spec0))
-  const spec_by_id = utils.by('id', spec)
-
-  const state = {} as Record<string, id>
-  const has_parent = {} as Record<string, boolean>
-
-  spec.forEach(s => (s.children || []).forEach(c => has_parent[c] = true))
-
-  const msgs: string[] = []
-
-  const graphics = Graphics()
-
+function calc_rightmost(spec: Spec<any>): Record<string, number> {
   const rightmost: Record<string, number> = {}
   let i = 0
 
@@ -662,19 +610,37 @@ export const G = (name: string | number, ...spec0: Spec<string | undefined>) => 
       rightmost[s.id] = Math.max(...s.children.map(cid => rightmost[cid]))
     }
   })
+  return rightmost
+}
+
+export function draw_tree(spec0: Spec<string | undefined>) {
+  const spec = measure_spec(document.body, utils.toposort(spec0))
+  const spec_by_id = utils.by('id', spec)
+  const rightmost = calc_rightmost(spec)
+  const has_parent = {} as Record<string, boolean>
+  spec.forEach(s => (s.children || []).forEach(c => has_parent[c] = true))
+
+  const state = {} as Record<string, id>
+  const layout = Layout()
 
   spec.forEach(s => {
     if (!s.children || s.children.length == 0) {
-      state[s.id] = graphics.terminal(s.label)
-      has_parent[s.id] || graphics.seal(state[s.id])
+      state[s.id] = layout.terminal(s.label)
+      has_parent[s.id] || layout.seal(state[s.id])
     } else {
       const children = s.children.map(id => state[id])
-      const HDs = s.children.flatMap(id => utils.maybe(spec_by_id[id].flabel, false, x => x.from_source == 'HD') ? [state[id]] : [])
+      let HD_id: string | undefined
+      s.children.forEach(id => {
+        const {flabel} = spec_by_id[id]
+        if (flabel && flabel.from_source == 'HD') {
+          HD_id = state[id]
+        }
+      })
       const only = s.only ? state[s.only] : undefined
-      const nt = graphics.nonterminal(
+      const nt = layout.nonterminal(
         children,
         only ? {group: 'only', id: only} :
-        HDs.length > 0 ? {group: 'contains', id: HDs[0]} : {group: 'widest'},
+        HD_id ? {group: 'contains', id: HD_id} : {group: 'widest'},
         Object.fromEntries(s.children.map(id => [state[id], spec_by_id[id].flabel || zero])),
         (s.secondary || []).sort((s1, s2) => {
           const d = rightmost[s2.id] - rightmost[s1.id]
@@ -686,32 +652,12 @@ export const G = (name: string | number, ...spec0: Spec<string | undefined>) => 
           right: rightmost[secedge.id] > rightmost[s.id]
         }))
       )
-      state[s.id] = graphics.label(nt, s.label, undefined)
-      has_parent[s.id] || graphics.seal(state[s.id])
+      state[s.id] = layout.label(nt, s.label, undefined)
+      has_parent[s.id] || layout.seal(state[s.id])
     }
   })
 
-  return graphics.draw()
-    // css`
-    //   display: flex;
-    //   align-items: start;
-    // `,
-    // css`
-    //   & > * {
-    //     flex: 1;
-    //     overflow: auto;
-    //   }
-    // `,
-    // pre(msgs.join('\n'), css`font-size: 12px`),
-    // pre(
-    //   css`display: none`,
-    //   name + '', '\n',
-    //   pretty({
-    //     spec: renumber(spec0) // : utils.topo(spec0),
-    //     // state, w, h
-    //   }),
-    //   css`font-size: 17px`
-    // ),
-
+  // return div(layout.draw(), domdiff.pre(pretty(spec)))
+  return layout.draw()
 }
 
