@@ -11,10 +11,6 @@ const {div, style, span} = domdiff
 const {css} = domdiff.class_cache()
 
 const svg = domdiff.MakeTag('svg')
-const upside_up = css`
-  & { transform: scaleY(-1) }
-  & text { transform: scaleY(-1) }
-`
 const path = domdiff.MakeTag('path')
 const g = domdiff.MakeTag('g')
 const d = domdiff.MakeAttr('d')
@@ -83,9 +79,9 @@ const zero: DiffWithRect = {
 
 const default_options = {
   gap_x: 12,
-  gap_under_label: 4,
-  gap_under_flabel: 4,
-  gap_over_flabel: 4,
+  gap_under_label: 0,
+  gap_under_flabel: 5,
+  gap_over_flabel: 0,
   line_width: 2,
   line_gap: 4,
 }
@@ -527,7 +523,10 @@ function Layout(
     })
 
     const svg_lines = svg(
-      upside_up,
+      css`
+        & { transform: scaleY(-1) }
+        & text { transform: scaleY(-1) }
+      `,
       css`position: absolute`,
       px({width, height, bottom: 0, left: 0}),
       ...svg_children)
@@ -543,56 +542,69 @@ function Layout(
   return {terminal, label, nonterminal, seal, draw}
 }
 
-const try_span = (s?: string) => s ? span(style`white-space: pre; display: inline-block;`, s) : span(px({height: 0, width: 0}))
-
 function measure_spec(measure_root: Element, spec: Spec<string | undefined>): Spec<DiffWithRect> {
+
+  function try_span(s: string | undefined, cls: string) {
+    if (s) {
+      return span(
+        style`
+          white-space: pre;
+          display: inline-block;
+          margin: -2px 0;
+        `,
+        {'class': cls},
+        s)
+    } else {
+      return span(px({height: 0, width: 0}))
+    }
+  }
+
   const p = {} as Record<string, Element>
 
-  const position = (text: string) => {
-    if (text in p) {
-      return p[text]
+  function position(text: string, cls: string) {
+    const x = JSON.stringify({text, cls})
+    if (x in p) {
+      return p[x]
     }
-    const diff = try_span(text)
+    const diff = try_span(text, cls)
     const e = diff()
     measure_root.appendChild(e)
-    p[text] = e
+    p[x] = e
+    return p[x]
   }
 
-  spec.forEach(e => {
-    e.label && position(e.label)
-    e.flabel && position(e.flabel)
-    e.secondary && e.secondary.forEach(secedge => {
-      secedge.label && position(secedge.label)
-    })
-  })
-
-  function measure(text?: string) {
-    if (text === undefined || text === '') {
-      return zero
-    } else {
-      const rect = p[text].getBoundingClientRect()
-      const diff = try_span(text)
-      return {
-        diff,
-        from_source: text,
-        rect: {width: rect.width, height: rect.height},
-      }
-    }
-  }
-
-  const out_spec = spec.map(e => {
-    return {
+  function with_entry(f) {
+    return e => ({
       ...e,
-      label: measure(e.label),
-      flabel: measure(e.flabel),
+      label: f(e.label, (e.children && e.children.length) ? 'label' : 'token'),
+      flabel: f(e.flabel, 'flabel'),
       secondary:
         (e.secondary || []).map(
           secedge => ({
             ...secedge,
-            label: measure(secedge.label)
+            label: f(secedge.label, 'flabel')
           }))
+    })
+  }
+
+  spec.forEach(with_entry(position))
+
+  function measure(text: string | undefined, cls: string) {
+    if (text === undefined || text === '') {
+      return zero
+    } else {
+      const x = JSON.stringify({text, cls})
+      const rect = p[x].getBoundingClientRect()
+      const diff = try_span(text, cls)
+      return {
+        diff,
+        from_source: text,
+        rect: {width: rect.width, height: rect.height - 2},
+      }
     }
-  })
+  }
+
+  const out_spec = spec.map(with_entry(measure))
 
   Object.values(p).forEach(e => measure_root.removeChild(e))
 

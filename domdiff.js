@@ -176,6 +176,10 @@ export function make_class_cache(class_prefix='c') {
     sheet: () => Tag('style', lines),
     css,
     generate_class,
+    clear: () => {
+      lines.splice(0, lines.length)
+      generated.clear()
+    },
   }
 }
 

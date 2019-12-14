@@ -1,22 +1,13 @@
-import * as koala from "./parse_koala"
-
 import * as utils from "./utils"
-
 import * as domdiff from "./domdiff.js"
 const {body, div, span, select, button, input, datalist, option, textarea} = domdiff
-const {css, sheet} = domdiff.class_cache()
-
-import {draw_tree, Spec} from "./trees"
-
-import {Store} from "reactive-lens"
-
-declare const module: {hot?: {accept: Function}}
-module.hot && module.hot.accept()
+const {css, sheet, clear} = domdiff.class_cache()
+clear()
 
 css`
   body {
     font-family: Source Sans Pro;
-    font-size: 22px;
+    font-size: 16px;
     font-weight: 400;
   }
   pre {
@@ -25,11 +16,21 @@ css`
     padding-left: 2px;
     background: #f8f8f8;
   }
+  .flabel {
+    font-size: 14px;
+  }
 `;
 
 if (!document.querySelector('style')) {
   body(sheet())(document.body)
 }
+
+import * as koala from "./parse_koala"
+import {draw_tree} from "./trees"
+import {Store} from "reactive-lens"
+
+declare const module: {hot?: {accept: Function}}
+module.hot && module.hot.accept()
 
 function strs_of(x: any): string[] {
   const out: string[] = []
@@ -52,7 +53,7 @@ function strs_of(x: any): string[] {
         ...obj.split('_'),
         ...obj.split('-'),
         ...obj.split(/[_.\-]/g)
-      ].filter(s => !s.match(/^[-.\d]*$/)))
+      ].filter(s => !s.match(/^[-.\d]+[abc]?$/)))
       out.push(...cands)
     }
   }
