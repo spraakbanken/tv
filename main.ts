@@ -46,15 +46,21 @@ function strs_of(x: any): string[] {
         }
         rec(v)
       }
-    } else if (typeof obj === 'string' && !obj.match(/^\d*$/)) {
-      out.push(...obj.split(' '))
+    } else if (typeof obj === 'string') {
+      const cands: string[] = utils.nub([
+        ...obj.split(' '),
+        ...obj.split('_'),
+        ...obj.split('-'),
+        ...obj.split(/[_.\-]/g)
+      ].filter(s => !s.match(/^[-.\d]*$/)))
+      out.push(...cands)
     }
   }
 }
 
 const pr = console.log.bind(console)
 
-const st0 = {
+const state0 = {
   message: '',
   sents: [] as koala.Sentence[],
   index: {} as Record<string, koala.Sentence[]>,
@@ -66,21 +72,21 @@ const st0 = {
   }
 }
 
-type St = typeof st0
+type State = typeof state0
 
 declare global {
   interface Window {
-    store: Store<St>
+    store: Store<State>
   }
 }
 
 if (!window.store) {
-  window.store = Store.init(st0)
+  window.store = Store.init(state0)
 } else {
   window.store = Store.init(window.store.get())
 }
 
-const store = window.store as Store<St>
+const store = window.store as Store<State>
 
 const run_query = utils.limit(250, () => {
   const {query, index, sents} = store.get()
