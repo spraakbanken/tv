@@ -56,56 +56,10 @@ function incremental<A>(spec: Spec<A>): Spec<A>[] {
 
 examples:
 if (true) {
-  const G = (...spec: Spec<string>) => examples.push(
-    spec,
-    // secondary_clutter(spec, 0.95),
-  )
-
-  utils.range(0, 4).forEach(i =>
-    G(
-      ...base(`Den nya trädvisualiseraren${i > 0 ? ' (hur svårt kan det vara?)' : ''}`),
-      ...nodes(Object.fromEntries(([
-        i <= 2 && ['title', 'Den nya trädvisualiseraren'],
-        i >= 2 && ['hybris', '(hur svårt kan det vara?)'],
-        i >= 3 && ['subtitle', 'Den nya trädvisualiseraren'],
-        i >= 4 && ['title', 'subtitle hybris']
-      ] as any).filter(Boolean)))
-    )
-  )
 
   const Incremental = x => examples.push(x, ...incremental(utils.toposort(x)))
 
-  Incremental([
-    { id: "1.2", label: "Men", flabel: "DF", children: [], secondary: [] },
-    { id: "2.2", label: "vad", flabel: "OO", children: [], secondary: [] },
-    { id: "3.2", label: "ska", flabel: "HD", children: [], secondary: [] },
-    { id: "4.2", label: "jag", flabel: "SB", children: [], secondary: [] },
-    { id: "5.2", label: "då", flabel: "MD", children: [], secondary: []},
-    { id: "6.2", label: "ta", flabel: "ME", children: [], secondary: []},
-    { id: "7.2", label: "mej", flabel: "OO", children: [], secondary: [] },
-    { id: "8.2", label: "till", flabel: "HD", children: [], secondary: [] },
-    { id: "9.2", label: "!", children: [], secondary: []},
-    { id: "0.2", label: "—", children: [], secondary: []},
-    { id: "1.20", label: "VBM", children: ["6.2"], secondary: [{id: "8.2", label: "ME"}, {id: "7.2", label: "ME"}], flabel: "HD" },
-    { id: "1.21", label: "VP", children: ["1.23", "1.20", "7.2"], secondary: [{id: "4.2", label: "SB"}], flabel: "IV" },
-    { id: "1.22", label: "S", children: ["1.2", "1.21", "3.2", "4.2", "5.2"], secondary: [] },
-    { id: "1.23", label: "PP", children: ["2.2", "8.2"], secondary: [], flabel: "OA" }
-  ])
-
-  Incremental([
-    { id: "0", label: "Svenson", flabel: "SB", children: [], secondary: [] },
-    { id: "1", label: "börjar", flabel: "HD", children: [], secondary: [] },
-    { id: "2", label: "skrika", flabel: "HD", children: [], secondary: [] },
-    { id: "3", label: "och", flabel: "PH", children: [], secondary: [] },
-    { id: "4", label: "gestikulera", flabel: "HD", children: [], secondary: [] },
-    { id: "6", label: "KoP", children: ["7", "3", "10"], secondary: []},
-    { id: "7", label: "S", children: ["0", "1", "8"], secondary: [], flabel: "KL" },
-    { id: "8", label: "VP", children: ["2"], secondary: [{id: "0", label: "SB"}], flabel: "IV" },
-    { id: "9", label: "VP", children: ["4"], secondary: [{id: "0", label: "SB"}], flabel: "IV" },
-    { id: "10", label: "S", children: ["9"], secondary: [{id: "0", label: "SB"}, {id: "1", label: "HD"}], flabel: "KL" },
-  ])
-
-  Incremental([
+  const svenson_tar_sig_till = [
     { id: "0", label: "Svenson", flabel: "SB", children: [], secondary: [] },
     { id: "1", label: "börjar", flabel: "HD", children: [], secondary: [] },
     { id: "2", label: "skrika", flabel: "HD", children: [], secondary: [] },
@@ -131,40 +85,187 @@ if (true) {
     { id: "1.21", label: "VP", children: ["1.23", "1.20", "7.2"], secondary: [{id: "4.2", label: "SB"}], flabel: "IV" },
     { id: "1.22", label: "S", children: ["1.2", "1.21", "3.2", "4.2", "5.2"], secondary: [] },
     { id: "1.23", label: "PP", children: ["2.2", "8.2"], secondary: [], flabel: "OA" }
-  ])
+  ]
+
+  const ta_sig_till = [
+    { id: "1.2", label: "Men", flabel: "DF", children: [], secondary: [] },
+    { id: "2.2", label: "vad", flabel: "OO", children: [], secondary: [] },
+    { id: "3.2", label: "ska", flabel: "HD", children: [], secondary: [] },
+    { id: "4.2", label: "jag", flabel: "SB", children: [], secondary: [] },
+    { id: "5.2", label: "då", flabel: "MD", children: [], secondary: []},
+    { id: "6.2", label: "ta", flabel: "ME", children: [], secondary: []},
+    { id: "7.2", label: "mej", flabel: "OO", children: [], secondary: [] },
+    { id: "8.2", label: "till", flabel: "HD", children: [], secondary: [] },
+    { id: "9.2", label: "!", children: [], secondary: []},
+    { id: "0.2", label: "—", children: [], secondary: []},
+    { id: "1.20", label: "VBM", children: ["6.2"], secondary: [{id: "8.2", label: "ME"}, {id: "7.2", label: "ME"}], flabel: "HD" },
+    { id: "1.21", label: "VP", children: ["1.23", "1.20", "7.2"], secondary: [{id: "4.2", label: "SB"}], flabel: "IV" },
+    { id: "1.22", label: "S", children: ["1.2", "1.21", "3.2", "4.2", "5.2"], secondary: [] },
+    { id: "1.23", label: "PP", children: ["2.2", "8.2"], secondary: [], flabel: "OA" }
+  ]
+
+  const svenson = [
+    { id: "0", label: "Svenson", flabel: "SB", children: [], secondary: [] },
+    { id: "1", label: "börjar", flabel: "HD", children: [], secondary: [] },
+    { id: "2", label: "skrika", flabel: "HD", children: [], secondary: [] },
+    { id: "3", label: "och", flabel: "PH", children: [], secondary: [] },
+    { id: "4", label: "gestikulera", flabel: "HD", children: [], secondary: [] },
+    { id: "6", label: "KoP", children: ["7", "3", "10"], secondary: []},
+    { id: "7", label: "S", children: ["0", "1", "8"], secondary: [], flabel: "KL" },
+    { id: "8", label: "VP", children: ["2"], secondary: [{id: "0", label: "SB"}], flabel: "IV" },
+    { id: "9", label: "VP", children: ["4"], secondary: [{id: "0", label: "SB"}], flabel: "IV" },
+    { id: "10", label: "S", children: ["9"], secondary: [{id: "0", label: "SB"}, {id: "1", label: "HD"}], flabel: "KL" },
+  ]
+
+  const G = (...spec: Spec<string>) => examples.push(
+    spec,
+    // secondary_clutter(spec, 0.95),
+  )
+
+  utils.range(0, 4).forEach(i =>
+    G(
+      ...base(`Den nya trädvisualiseraren${i > 0 ? ' (hur svårt kan det vara?)' : ''}`),
+      ...nodes(Object.fromEntries(([
+        i <= 2 && ['title', 'Den nya trädvisualiseraren'],
+        i >= 2 && ['hybris', '(hur svårt kan det vara?)'],
+        i >= 3 && ['subtitle', 'Den nya trädvisualiseraren'],
+        i >= 4 && ['title', 'subtitle hybris']
+      ] as any).filter(Boolean)))
+    )
+  )
+
+  G(...svenson_tar_sig_till)
+
+  G(...base('några nätta ord'),
+    ...nodes({
+      'NP1': 'nätta ord',
+      'NP2': 'några NP1',
+    }))
+
+  const wide_lbl = [...base('några nätta ord'),
+    ...nodes({
+      'en-jättebred-etikett': 'nätta ord',
+      NP: 'några en-jättebred-etikett',
+    })
+  ]
+
+  Incremental(wide_lbl)
+
+  G(...base('jag lyssnar på några nätta ord'),
+    ...nodes({
+      NP: 'några nätta ord',
+      PP: 'på NP',
+      S: 'lyssnar jag PP',
+    }))
+
+  G(...base('några nätta ord lyssnar jag på'),
+    ...nodes({
+      NP: 'några nätta ord',
+      PP: 'på NP',
+      S: 'lyssnar jag PP',
+    }))
+
+  const orkar_ = [
+    ...base('några nätta ord lyssnar jag på|HD'),
+    ...nodes({
+      NP: 'några nätta ord',
+      PP: 'på NP',
+      S: 'lyssnar jag PP',
+    })
+  ]
+
+  Incremental(orkar_)
+
+  G(
+     {id: '3', label: "Jag", flabel: "SB"},
+     {id: '1', label: "kan", flabel: "HD"},
+     {id: '2', label: "åtminstone", flabel: "MD"},
+     {id: '4', label: "personligen", flabel: "HD"},
+     {id: '8', label: "instämma", flabel: "HD"},
+     {id: '9', label: "i", flabel: "HD"},
+     {id: '0', label: "detta", flabel: "OO"},
+     {id: '10', label: "."},
+     {id: '13', label: "PP", children: ['0', '9'], flabel: "MD"},
+     {id: '14', label: "AbP", children: ['2', '4'], flabel: "MD"},
+     {id: '15', label: "VP", children: ['13', '8'], flabel: "IV"},
+     {id: '12', label: "S", children: ['15', '1', '14', '3']},
+  )
+
+  utils.invert(utils.insertion_sides, k =>
+    G(
+        {id: '0', label: "Detta", flabel: "OO"},
+        {id: '1', label: "kan", flabel: "HD"},
+        {id: '2', label: "åtminstone", flabel: "MD"},
+        {id: '3', label: "jag", flabel: "SB"},
+        {id: '4', label: "personligen", flabel: "HD"},
+        {id: '8', label: "instämma", flabel: "HD"},
+        {id: '9', label: "i", flabel: "HD"},
+        {id: '10', label: "."},
+        ...k(
+          {id: '13', label: "PP", children: ['0', '9'], flabel: "MD"},
+          [
+            {id: '14', label: "AbP", children: ['2', '4'], flabel: "MD"},
+          ]
+        ),
+        {id: '15', label: "VP", children: ['13', '8'], flabel: "IV"},
+        {id: '12', label: "S", children: ['15', '1', '14', '3']},
+    )
+  )
+
+  Incremental(svenson_tar_sig_till)
+
+  utils.invert(utils.insertion_sides, k =>
+    G(
+        {id: '0', label: "Detta", flabel: "OO"},
+        {id: '1', label: "kan", flabel: "HD"},
+        {id: '3', label: "jag", flabel: "SB"},
+        {id: '5', label: "helt", flabel: "KL"},
+        {id: '6', label: "och", flabel: "PH"},
+        {id: '7', label: "hållet", flabel: "KL"},
+        {id: '8', label: "instämma", flabel: "HD"},
+        {id: '9', label: "i", flabel: "HD"},
+        {id: '10', label: "."},
+        ...k(
+          {id: '13', label: "PP", children: ['0', '9'], flabel: "MD"},
+          [
+            {id: '11', label: "KoP", children: ['5', '6', '7'], flabel: "MD"},
+          ]
+        ),
+        {id: '15', label: "VP", children: ['13', '11', '8'], flabel: "IV"},
+        {id: '12', label: "S", children: ['15', '1', '3']},
+    )
+  )
 
   utils.invert(utils.insertions, k =>
-    G(/* { id: "21", label: "[...]", flabel: "PH", children: [], secondary: [] },
-      { id: "22", label: "nu", flabel: "MD", children: [], secondary: [] },
-      { id: "23", label: "ska", flabel: "HD", children: [], secondary: [] },
-      { id: "24", label: "vi", flabel: "SB", children: [], secondary: [] },
-      { id: "25", label: "ombord", flabel: "RA", children: [], secondary: [] },
-      { id: "26", label: "och", flabel: "PH", children: [], secondary: [] },
-      { id: "27", label: "äta", flabel: "HD", children: [], secondary: [] },
-        */
-      { id: "...", label: "[...]", flabel: "...", children: [], secondary: [] },
+    G(...base('a|A b|B c|C d|D'),
+      ...k({"id": "bc", "flabel": "BC", "label": "Y", "children": ["b", "c"]}, [
+          {"id": "ad", "flabel": "AD", "label": "X", "children": ["a", "d"]},
+      ]),
+      {"id": "S", "label": "S", "children": ["ad", "bc"]}
+    )
+  )
+
+  utils.invert(utils.insertions, k =>
+    G({ id: "...", label: "[...]", flabel: "...", children: [], secondary: [] },
       { id: "28", label: "det", flabel: "DT", children: [], secondary: [] },
       { id: "29", label: "sista", flabel: "HD", children: [], secondary: [] },
-      { id: "30", label: "civiliserade", flabel: "MD", children: [], secondary: [] },
       { id: "31", label: "mål", flabel: "HD", children: [], secondary: [] },
       { id: "32", label: "mat", flabel: "HD", children: [], secondary: [] },
       { id: "33", label: "ni", flabel: "SB", children: [], secondary: [] },
       { id: "34", label: "får", flabel: "HD", children: [], secondary: [] },
       { id: "35", label: "på", flabel: "HD", children: [], secondary: [] },
-      { id: "36", label: "två", flabel: "DT", children: [], secondary: [] },
-      { id: "37", label: "månader", flabel: "HD", children: [], secondary: [] },
+      { id: "37", label: "månader", flabel: "OO", children: [], secondary: [] },
       { id: "38", label: ".", children: [], secondary: []},
-      { id: "52", label: "NP", children: ["28", "59", "30", "31", "60"], secondary: [], flabel: "OO" },
-      { id: "53", label: "VP", children: ["27", "52"], secondary: [{id: "24", label: "SB"}], flabel: "IV" },
+      { id: "52", label: "NP", children: ["28", "59", "31", "60"], secondary: [], flabel: "OO" },
+      { id: "53", label: "VP", children: ["27", "52"], secondary: [], flabel: "IV" },
       { id: "54", label: "S", children: ["22", "23", "24", "25"], secondary: [], flabel: "KL" },
       { id: "55", label: "KoP", children: ["54", "26", "56"], secondary: [], flabel: "KL" },
-      { id: "56", label: "S", children: ["53"], secondary: [ {id: "22", label: "MD"}, {id: "24", label: "SB"}, {id: "23", label: "HD"} ], flabel: "KL" },
-      { id: "50", label: "PP", children: ["35", "49"], secondary: [], flabel: "MD" },
-      { id: "49", label: "NP", children: ["36", "37"], secondary: [], flabel: "OO" },
+      { id: "56", label: "S", children: ["53"], secondary: [], flabel: "KL" },
+      { id: "50", label: "PP", children: ["35", "37"], secondary: [], flabel: "MD" },
       ...k(
         { id: "59", label: "AjP", children: ["29", "50"], secondary: [], flabel: "MD" },
         [
-          { id: "51", label: "S", children: ["33", "34"], secondary: [{id: "32", label: "OO"}], flabel: "MD" },
+          { id: "51", label: "S", children: ["33", "34"], secondary: [], flabel: "MD" },
           { id: "60", label: "NP", children: ["32", "51"], secondary: [], flabel: "MD" },
         ]
       )
@@ -196,7 +297,8 @@ if (true) {
     )
   )
 
-
+  Incremental(ta_sig_till)
+  Incremental(svenson)
 
   G(...base('a b c d'),
     ...nodes({

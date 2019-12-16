@@ -167,13 +167,26 @@ import {examples} from "./examples"
         e.target && e.target.blur && e.target.blur()
       }
       if (e.target !== document.body) return
+      console.log(e.key)
       const N = current.get().sel.length
-      switch (e.key) {
-        case "ArrowRight": current.at('pos').modify(x => Math.min(x + 1, N - 1)); break
-        case "ArrowLeft":  current.at('pos').modify(x => Math.max(x - 1, 0)); break
-        case "ArrowDown":  current.at('width').modify(x => Math.max(x - 1, 1)); break
-        case "ArrowUp":    current.at('width').modify(x => x + 1); break
-      }
+
+      const ops = {
+        ArrowRight: () => current.at('pos').modify(x => Math.min(x + 1, N - 1)),
+        ArrowLeft:  () => current.at('pos').modify(x => Math.max(x - 1, 0)),
+        ArrowDown:  () => current.at('width').modify(x => Math.max(x - 1, 1)),
+        ArrowUp:    () => current.at('width').modify(x => x + 1),
+        "-": () => current.transaction(() => {
+          ops.ArrowRight()
+          ops.ArrowDown()
+        }),
+        Enter: () => current.transaction(() => {
+          utils.range(1, current.get().width).forEach(() => ops.ArrowRight())
+          current.update({width: 1})
+        }),
+      } as Record<string, Function>
+
+      const op = ops[e.key]
+      op && op()
     }
   } else if (sents.length == 0) {
     load_koala()
@@ -320,10 +333,17 @@ body(
 function edit_tree(spec0: Spec<string>) {
   const tmp = Store.init(spec0)
   const vis = Store.init(false)
+  function try_(m, f) {
+    try {
+      return m()
+    } catch (e) {
+      return f(e)
+    }
+  }
   return [
     track(tmp,
       spec => div(
-        draw_tree(spec),
+        try_(() => draw_tree(spec), e => div(e.toString())),
         { ondblclick: () => vis.modify(b => !b) }
       )
     ),
