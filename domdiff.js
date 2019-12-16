@@ -156,6 +156,14 @@ export function make_class_cache(class_prefix='c') {
   const generated = new Map()
   const lines = []
 
+  const id = 'class_cache_' + class_prefix
+  const sheet = () => Tag('style', [{id}, ...lines])
+  const dom = document.getElementById(id) || sheet()()
+  document.head.appendChild(dom)
+
+  const update = () => sheet()(dom)
+  update()
+
   function generate_class(key, gen_code) {
     if (!generated.has(key)) {
       const code = gen_code().trim().replace(/\n\s*/g, '\n').replace(/[:{;]\s*/g, g => g[0])
@@ -167,18 +175,19 @@ export function make_class_cache(class_prefix='c') {
         lines.push(code.replace(/&/g, _ => `.${name}`) + '\n')
       }
     }
+    update()
     return {'class': generated.get(key)}
   }
 
   const css = forward(template_to_string, s => generate_class(s, () => s))
 
   return {
-    sheet: () => Tag('style', lines),
     css,
     generate_class,
     clear: () => {
       lines.splice(0, lines.length)
       generated.clear()
+      update()
     },
   }
 }

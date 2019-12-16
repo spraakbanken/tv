@@ -77,15 +77,6 @@ const zero: DiffWithRect = {
   rect: zero_rect,
 }
 
-const default_options = {
-  gap_x: 12,
-  gap_under_label: 0,
-  gap_under_flabel: 5,
-  gap_over_flabel: 0,
-  line_width: 2,
-  line_gap: 4,
-}
-
 type id = string
 
 type Content = Readonly<
@@ -104,6 +95,15 @@ interface Block {
   min_height: number
   contents: Content[]
   sealed: boolean
+}
+
+const default_options = {
+  gap_x: 12,
+  gap_under_label: 0,
+  gap_under_flabel: 4,
+  gap_over_flabel: 0,
+  line_width: 2,
+  line_gap: 6,
 }
 
 function Layout(
@@ -166,7 +166,7 @@ function Layout(
       right,
       mid,
       top,
-      min_height: top,
+      min_height: top + opts.line_width,
       contents: [
         {tag: 'diff', diff: element.diff, rect: element.rect, x: label_x, y: child_block.top + line_height},
         {tag: 'vline', x: mid, bottom: child_block.top, top: line_height + child_block.top},
@@ -561,7 +561,7 @@ function measure_spec(measure_root: Element, spec: Spec<string | undefined>): Sp
 
   const p = {} as Record<string, Element>
 
-  function position(text: string, cls: string) {
+  function position(text: string | undefined, cls: string) {
     const x = JSON.stringify({text, cls})
     if (x in p) {
       return p[x]
@@ -572,22 +572,6 @@ function measure_spec(measure_root: Element, spec: Spec<string | undefined>): Sp
     p[x] = e
     return p[x]
   }
-
-  function with_entry(f) {
-    return e => ({
-      ...e,
-      label: f(e.label, (e.children && e.children.length) ? 'label' : 'token'),
-      flabel: f(e.flabel, 'flabel'),
-      secondary:
-        (e.secondary || []).map(
-          secedge => ({
-            ...secedge,
-            label: f(secedge.label, 'flabel')
-          }))
-    })
-  }
-
-  spec.forEach(with_entry(position))
 
   function measure(text: string | undefined, cls: string) {
     if (text === undefined || text === '') {
@@ -604,7 +588,23 @@ function measure_spec(measure_root: Element, spec: Spec<string | undefined>): Sp
     }
   }
 
-  const out_spec = spec.map(with_entry(measure))
+  function mapEntry<A, B>(f: (a: A, cls: string) => B) {
+    return (e: SpecEntry<A>): SpecEntry<B> => ({
+      ...e,
+      label: f(e.label, (e.children && e.children.length) ? 'label' : 'token'),
+      flabel: e.flabel && f(e.flabel, 'flabel'),
+      secondary:
+        (e.secondary || []).map(
+          secedge => ({
+            ...secedge,
+            label: f(secedge.label, 'flabel')
+          }))
+    })
+  }
+
+  spec.forEach(mapEntry(position))
+
+  const out_spec = spec.map(mapEntry(measure))
 
   Object.values(p).forEach(e => measure_root.removeChild(e))
 
@@ -669,7 +669,7 @@ export function draw_tree(spec0: Spec<string | undefined>) {
     }
   })
 
-  // return div(layout.draw(), domdiff.pre(pretty(spec)))
+  // return div(layout.draw(), domdiff.pre(pretty(spec0)))
   return layout.draw()
 }
 

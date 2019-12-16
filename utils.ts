@@ -184,14 +184,14 @@ test(drop_while_both_ends, [1,2,3], i => i != 2).is = [2]
 test(drop_while_both_ends, [1,2,3], i => i == 1).is = [2, 3]
 test(drop_while_both_ends, [1,2,3], i => false).is = [1, 2, 3]
 
-export function partition<A>(xs: A[], p: (a: A) => boolean) {
+export function partition<A>(xs: A[], p: (a: A, i: number) => boolean) {
   const yes = [] as A[]
   const no = [] as A[]
-  xs.forEach(x => (p(x) ? yes : no).push(x))
+  xs.forEach((x, i) => (p(x, i) ? yes : no).push(x))
   return [yes, no]
 }
 
-test(partition, [1,2,3,4,5], x => x % 2 == 0).is = [[2, 4], [1, 3, 5]]
+test(partition, [1,2,3,4,5], (x: number) => x % 2 == 0).is = [[2, 4], [1, 3, 5]]
 
 export function by<T extends Record<string, any>>(k: keyof T, xs: T[]): Record<string, T> {
   return Object.fromEntries(xs.map(s => [s[k], s])) as any
@@ -271,4 +271,85 @@ export const limit = <A extends Array<any>, B>(ms: number, f: (...args: A) => B)
     }, ms)
   }
 }
+
+export function splits<A>(xs: A[]): [A[], A[]][] {
+  return range(0, xs.length).map(i => [
+    xs.slice(0, i),
+    xs.slice(i, xs.length)
+  ])
+}
+
+test(splits, [1, 2, 3]).is = [
+  [[], [1, 2, 3]],
+  [[1], [2, 3]],
+  [[1, 2], [3]],
+  [[1, 2, 3], []],
+]
+
+export function sequence(xs: A[][]): A[][] {
+  if (xs.length == 0) {
+    return [[]]
+  } else {
+    const [h, ...t] = xs
+    return h.flatMap(h => sequence(t).map(t => [h, ...t]))
+  }
+}
+
+const io = [1, 0]
+test(sequence, [io, io, io]).is = [
+  [1, 1, 1],
+  [1, 1, 0],
+  [1, 0, 1],
+  [1, 0, 0],
+  [0, 1, 1],
+  [0, 1, 0],
+  [0, 0, 1],
+  [0, 0, 0],
+]
+
+export function insertions<A>(x: A, xs: A[]): A[][] {
+  return splits(xs).map(([l, r]) => [...l, x, ...r])
+}
+
+test(insertions, 'x', [1, 2, 3]).is = [
+  ['x', 1, 2, 3],
+  [1, 'x', 2, 3],
+  [1, 2, 'x', 3],
+  [1, 2, 3, 'x'],
+]
+
+export function insertion_sides<A>(x: A, xs: A[]): A[][] {
+  const to_left = xs.map(_ => [false, true])
+  return sequence(to_left).map(w => w.reverse()).map(to_left => {
+    const [l, r] = partition(xs, (_, i) => to_left[i])
+    return [...l, x, ...r]
+  })
+}
+
+test(insertion_sides, 'x', [1, 2]).is = [
+  ['x', 1, 2],
+  [1, 'x', 2],
+  [2, 'x', 1],
+  [1, 2, 'x'],
+]
+
+export function invert<A extends Array<any>, B, C>(
+  f: (...args: A[]) => B[],
+  g: (f: (...args: A[]) => B) => C,
+): C[] {
+  const out: C[] = []
+  out.push(g((...args: A[]) => {
+    const bs = f(...args).slice()
+    const [b_last] = bs.splice(bs.length - 1, 1)
+    bs.forEach(b => out.push(g(() => b)))
+    return b_last
+  }))
+  return out
+}
+
+test(invert, insertions, k => `hello ${k(0, [8, 9])}!`).is = [
+  'hello 0,8,9!',
+  'hello 8,0,9!',
+  'hello 8,9,0!',
+]
 

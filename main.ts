@@ -1,12 +1,12 @@
 import * as utils from "./utils"
 import * as domdiff from "./domdiff.js"
 const {body, div, span, select, button, input, datalist, option, textarea} = domdiff
-const {css, sheet, clear} = domdiff.class_cache()
+const {css, clear} = domdiff.class_cache()
 clear()
 
 css`
   body {
-    font-family: Source Sans Pro;
+    font-family: 'Source Sans Pro', sans-serif;
     font-size: 16px;
     font-weight: 400;
   }
@@ -21,13 +21,10 @@ css`
   }
 `;
 
-if (!document.querySelector('style')) {
-  body(sheet())(document.body)
-}
-
 import * as koala from "./parse_koala"
-import {draw_tree} from "./trees"
+import {draw_tree, Spec} from "./trees"
 import {Store} from "reactive-lens"
+import {default as pretty} from "json-stringify-pretty-compact"
 
 declare const module: {hot?: {accept: Function}}
 module.hot && module.hot.accept()
@@ -88,8 +85,10 @@ if (!window.store) {
 }
 
 const store = window.store as Store<State>
+const current = store.at('current')
 
 const run_query = utils.limit(250, () => {
+  console.log('run_query', current.get())
   const {query, index, sents} = store.get()
   if (!query) {
     current.update({
@@ -128,7 +127,6 @@ const msg = domdiff.forward(domdiff.template_to_string, (message: string) => {
 })
 
 const koala_files: string[] = [
-  // comment out these to instead load examples
   './Eukalyptus_Public.xml',
   './Eukalyptus_Blog.xml',
   './Eukalyptus_Europarl.xml',
@@ -152,13 +150,33 @@ import {examples} from "./examples"
 
 {
   const {sents} = store.get()
-  if (sents.length == 0) {
-    load_koala()
-  }
-  if (koala_files.length == 0) {
+  const load_examples = window.location.hash == '#examples'
+  if (load_examples) {
+    const {pos} = current.get()
     store.update({
       sents: examples.map(spec => ({example: true, spec})) as any
     })
+    console.log({pos})
+    let off
+    off = current.on(() => {
+      current.update({pos})
+      off()
+    })
+    window.onkeydown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.target && e.target.blur && e.target.blur()
+      }
+      if (e.target !== document.body) return
+      const N = current.get().sel.length
+      switch (e.key) {
+        case "ArrowRight": current.at('pos').modify(x => Math.min(x + 1, N - 1)); break
+        case "ArrowLeft":  current.at('pos').modify(x => Math.max(x - 1, 0)); break
+        case "ArrowDown":  current.at('width').modify(x => Math.max(x - 1, 1)); break
+        case "ArrowUp":    current.at('width').modify(x => x + 1); break
+      }
+    }
+  } else if (sents.length == 0) {
+    load_koala()
   }
 }
 
@@ -205,14 +223,12 @@ const with_ref = (f, g) => (dom0, ns) => {
   return dom
 }
 
-const current = store.at('current')
-
 body(
   div(
     css`display: inline-block`,
     css`
       &, & > * { display: inline-block; }
-      & > * > * { margin: 0 5px; }
+      & > * > * { margin: 5px; }
     `,
     div(
       with_ref(
@@ -247,7 +263,12 @@ body(
       button('next', { onclick: () => current.at('pos').modify(x => Math.min(x + current.get().width, current.get().sel.length - 1)) }),
       'width:',
       with_ref(
-        (dom: HTMLSelectElement) => dom.value = '' + current.get().width,
+        (dom: HTMLSelectElement) => {
+          current.at('width').ondiff(x => {
+            const y = x + ''
+            y == dom.value || (dom.value = y)
+          })
+        },
         select(
           ...[1, 2, 5, 10, 20, 50].map(x => option(x + '')),
           {
@@ -276,8 +297,8 @@ body(
       `,
       css`
         & > * {
-          overflow: auto;
-          flex: 1;
+          overflow-x: auto;
+          overflow-y: hidden;
         }
       `,
       div(
@@ -287,30 +308,45 @@ body(
           align-self: flex-end;
         `
       ),
-      div(draw_tree(sent.spec))
+      ...edit_tree(sent.spec)
     ))
     console.timeEnd('trees')
     return div(
-      sheet(),
       ...trees
     )
-  }, 500),
+  }, 0),
 )(document.body)
 
+function edit_tree(spec0: Spec<string>) {
+  const tmp = Store.init(spec0)
+  const vis = Store.init(false)
+  return [
+    track(tmp,
+      spec => div(
+        draw_tree(spec),
+        { ondblclick: () => vis.modify(b => !b) }
+      )
+    ),
+    track(vis, v => div(
+      v && json_textarea(tmp, { onblur: () => vis.set(false) })
+    ))
+  ]
+}
 
-const _txt = (tmp: Store<string>) =>
-  with_ref(
-    (dom: HTMLTextAreaElement) => dom.value = JSON.stringify(tmp.get(), undefined, 2),
+function json_textarea(tmp: Store<any>, ...opts: any[]) {
+  return with_ref(
+    (dom: HTMLTextAreaElement) => dom.value = pretty(tmp.get()),
     textarea({
       rows: '25',
       cols: '120',
       oninput(e: InputEvent) {
         if (!e.target || !(e.target instanceof HTMLTextAreaElement)) return
         try {
-          const json = eval(e.target.value)
+          const json = (0, eval)(e.target.value)
           tmp.set(json)
         } catch (e) {
           msg`${e}`
         }
       }
-    }))
+    }, ...opts))
+}

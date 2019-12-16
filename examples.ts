@@ -49,11 +49,154 @@ function secondary_clutter(spec: Spec<string>, r = 0.9) {
   })
 }
 
+function incremental<A>(spec: Spec<A>): Spec<A>[] {
+  const [nt, t] = utils.partition(spec, e => utils.maybe(e.children, false, x => x.length > 0))
+  return utils.range(0, nt.length).map(i => [...t, ...nt.slice(0, i)])
+}
+
+examples:
 if (true) {
   const G = (...spec: Spec<string>) => examples.push(
     spec,
     // secondary_clutter(spec, 0.95),
   )
+
+  utils.range(0, 4).forEach(i =>
+    G(
+      ...base(`Den nya trädvisualiseraren${i > 0 ? ' (hur svårt kan det vara?)' : ''}`),
+      ...nodes(Object.fromEntries(([
+        i <= 2 && ['title', 'Den nya trädvisualiseraren'],
+        i >= 2 && ['hybris', '(hur svårt kan det vara?)'],
+        i >= 3 && ['subtitle', 'Den nya trädvisualiseraren'],
+        i >= 4 && ['title', 'subtitle hybris']
+      ] as any).filter(Boolean)))
+    )
+  )
+
+  const Incremental = x => examples.push(x, ...incremental(utils.toposort(x)))
+
+  Incremental([
+    { id: "1.2", label: "Men", flabel: "DF", children: [], secondary: [] },
+    { id: "2.2", label: "vad", flabel: "OO", children: [], secondary: [] },
+    { id: "3.2", label: "ska", flabel: "HD", children: [], secondary: [] },
+    { id: "4.2", label: "jag", flabel: "SB", children: [], secondary: [] },
+    { id: "5.2", label: "då", flabel: "MD", children: [], secondary: []},
+    { id: "6.2", label: "ta", flabel: "ME", children: [], secondary: []},
+    { id: "7.2", label: "mej", flabel: "OO", children: [], secondary: [] },
+    { id: "8.2", label: "till", flabel: "HD", children: [], secondary: [] },
+    { id: "9.2", label: "!", children: [], secondary: []},
+    { id: "0.2", label: "—", children: [], secondary: []},
+    { id: "1.20", label: "VBM", children: ["6.2"], secondary: [{id: "8.2", label: "ME"}, {id: "7.2", label: "ME"}], flabel: "HD" },
+    { id: "1.21", label: "VP", children: ["1.23", "1.20", "7.2"], secondary: [{id: "4.2", label: "SB"}], flabel: "IV" },
+    { id: "1.22", label: "S", children: ["1.2", "1.21", "3.2", "4.2", "5.2"], secondary: [] },
+    { id: "1.23", label: "PP", children: ["2.2", "8.2"], secondary: [], flabel: "OA" }
+  ])
+
+  Incremental([
+    { id: "0", label: "Svenson", flabel: "SB", children: [], secondary: [] },
+    { id: "1", label: "börjar", flabel: "HD", children: [], secondary: [] },
+    { id: "2", label: "skrika", flabel: "HD", children: [], secondary: [] },
+    { id: "3", label: "och", flabel: "PH", children: [], secondary: [] },
+    { id: "4", label: "gestikulera", flabel: "HD", children: [], secondary: [] },
+    { id: "6", label: "KoP", children: ["7", "3", "10"], secondary: []},
+    { id: "7", label: "S", children: ["0", "1", "8"], secondary: [], flabel: "KL" },
+    { id: "8", label: "VP", children: ["2"], secondary: [{id: "0", label: "SB"}], flabel: "IV" },
+    { id: "9", label: "VP", children: ["4"], secondary: [{id: "0", label: "SB"}], flabel: "IV" },
+    { id: "10", label: "S", children: ["9"], secondary: [{id: "0", label: "SB"}, {id: "1", label: "HD"}], flabel: "KL" },
+  ])
+
+  Incremental([
+    { id: "0", label: "Svenson", flabel: "SB", children: [], secondary: [] },
+    { id: "1", label: "börjar", flabel: "HD", children: [], secondary: [] },
+    { id: "2", label: "skrika", flabel: "HD", children: [], secondary: [] },
+    { id: "3", label: "och", flabel: "PH", children: [], secondary: [] },
+    { id: "4", label: "gestikulera", flabel: "HD", children: [], secondary: [] },
+    { id: "5", label: ":", children: [], secondary: []},
+    { id: "1.2", label: "Men", flabel: "DF", children: [], secondary: [] },
+    { id: "2.2", label: "vad", flabel: "OO", children: [], secondary: [] },
+    { id: "3.2", label: "ska", flabel: "HD", children: [], secondary: [] },
+    { id: "4.2", label: "jag", flabel: "SB", children: [], secondary: [] },
+    { id: "5.2", label: "då", flabel: "MD", children: [], secondary: []},
+    { id: "6.2", label: "ta", flabel: "ME", children: [], secondary: []},
+    { id: "7.2", label: "mej", flabel: "OO", children: [], secondary: [] },
+    { id: "8.2", label: "till", flabel: "HD", children: [], secondary: [] },
+    { id: "9.2", label: "!", children: [], secondary: []},
+    { id: "6", label: "KoP", children: ["7", "3", "10"], secondary: []},
+    { id: "7", label: "S", children: ["0", "1", "8"], secondary: [], flabel: "KL" },
+    { id: "8", label: "VP", children: ["2"], secondary: [{id: "0", label: "SB"}], flabel: "IV" },
+    { id: "9", label: "VP", children: ["4"], secondary: [{id: "0", label: "SB"}], flabel: "IV" },
+    { id: "10", label: "S", children: ["9"], secondary: [{id: "0", label: "SB"}, {id: "1", label: "HD"}], flabel: "KL" },
+    { id: "0.2", label: "—", children: [], secondary: []},
+    { id: "1.20", label: "VBM", children: ["6.2"], secondary: [{id: "8.2", label: "ME"}, {id: "7.2", label: "ME"}], flabel: "HD" },
+    { id: "1.21", label: "VP", children: ["1.23", "1.20", "7.2"], secondary: [{id: "4.2", label: "SB"}], flabel: "IV" },
+    { id: "1.22", label: "S", children: ["1.2", "1.21", "3.2", "4.2", "5.2"], secondary: [] },
+    { id: "1.23", label: "PP", children: ["2.2", "8.2"], secondary: [], flabel: "OA" }
+  ])
+
+  utils.invert(utils.insertions, k =>
+    G(/* { id: "21", label: "[...]", flabel: "PH", children: [], secondary: [] },
+      { id: "22", label: "nu", flabel: "MD", children: [], secondary: [] },
+      { id: "23", label: "ska", flabel: "HD", children: [], secondary: [] },
+      { id: "24", label: "vi", flabel: "SB", children: [], secondary: [] },
+      { id: "25", label: "ombord", flabel: "RA", children: [], secondary: [] },
+      { id: "26", label: "och", flabel: "PH", children: [], secondary: [] },
+      { id: "27", label: "äta", flabel: "HD", children: [], secondary: [] },
+        */
+      { id: "...", label: "[...]", flabel: "...", children: [], secondary: [] },
+      { id: "28", label: "det", flabel: "DT", children: [], secondary: [] },
+      { id: "29", label: "sista", flabel: "HD", children: [], secondary: [] },
+      { id: "30", label: "civiliserade", flabel: "MD", children: [], secondary: [] },
+      { id: "31", label: "mål", flabel: "HD", children: [], secondary: [] },
+      { id: "32", label: "mat", flabel: "HD", children: [], secondary: [] },
+      { id: "33", label: "ni", flabel: "SB", children: [], secondary: [] },
+      { id: "34", label: "får", flabel: "HD", children: [], secondary: [] },
+      { id: "35", label: "på", flabel: "HD", children: [], secondary: [] },
+      { id: "36", label: "två", flabel: "DT", children: [], secondary: [] },
+      { id: "37", label: "månader", flabel: "HD", children: [], secondary: [] },
+      { id: "38", label: ".", children: [], secondary: []},
+      { id: "52", label: "NP", children: ["28", "59", "30", "31", "60"], secondary: [], flabel: "OO" },
+      { id: "53", label: "VP", children: ["27", "52"], secondary: [{id: "24", label: "SB"}], flabel: "IV" },
+      { id: "54", label: "S", children: ["22", "23", "24", "25"], secondary: [], flabel: "KL" },
+      { id: "55", label: "KoP", children: ["54", "26", "56"], secondary: [], flabel: "KL" },
+      { id: "56", label: "S", children: ["53"], secondary: [ {id: "22", label: "MD"}, {id: "24", label: "SB"}, {id: "23", label: "HD"} ], flabel: "KL" },
+      { id: "50", label: "PP", children: ["35", "49"], secondary: [], flabel: "MD" },
+      { id: "49", label: "NP", children: ["36", "37"], secondary: [], flabel: "OO" },
+      ...k(
+        { id: "59", label: "AjP", children: ["29", "50"], secondary: [], flabel: "MD" },
+        [
+          { id: "51", label: "S", children: ["33", "34"], secondary: [{id: "32", label: "OO"}], flabel: "MD" },
+          { id: "60", label: "NP", children: ["32", "51"], secondary: [], flabel: "MD" },
+        ]
+      )
+    )
+  )
+
+  utils.invert(utils.insertion_sides, k =>
+    G(
+        {id: '0', label: "Detta", flabel: "OO"},
+        {id: '1', label: "kan", flabel: "HD"},
+        {id: '2', label: "åtminstone", flabel: "MD"},
+        {id: '3', label: "jag", flabel: "SB"},
+        {id: '4', label: "personligen", flabel: "HD"},
+        {id: '5', label: "helt", flabel: "KL"},
+        {id: '6', label: "och", flabel: "PH"},
+        {id: '7', label: "hållet", flabel: "KL"},
+        {id: '8', label: "instämma", flabel: "HD"},
+        {id: '9', label: "i", flabel: "HD"},
+        {id: '10', label: "."},
+        ...k(
+          {id: '13', label: "PP", children: ['0', '9'], flabel: "MD"},
+          [
+            {id: '14', label: "AbP", children: ['2', '4'], flabel: "MD"},
+            {id: '11', label: "KoP", children: ['5', '6', '7'], flabel: "MD"},
+          ]
+        ),
+        {id: '15', label: "VP", children: ['13', '11', '8'], flabel: "IV"},
+        {id: '12', label: "S", children: ['15', '1', '14', '3']},
+    )
+  )
+
+
 
   G(...base('a b c d'),
     ...nodes({
@@ -217,537 +360,69 @@ if (true) {
     {id: 'root', label: 'root', only: 'vill', children: words('SB vill OO')},
   )
 
-  G({
-      id: "0",
-      label: "Svenson",
-      flabel: "SB",
-      children: [],
-      secondary: []
-    },
-    {
-      id: "1",
-      label: "börjar",
-      flabel: "HD",
-      children: [],
-      secondary: []
-    },
-    {
-      id: "2",
-      label: "skrika",
-      flabel: "HD",
-      children: [],
-      secondary: []
-    },
-    {
-      id: "3",
-      label: "och",
-      flabel: "PH",
-      children: [],
-      secondary: []
-    },
-    {
-      id: "4",
-      label: "gestikulera",
-      flabel: "HD",
-      children: [],
-      secondary: []
-    },
-    {id: "5", label: ":", children: [], secondary: []},
-    {id: "6", label: "KoP", children: ["7", "3", "10"], secondary: []},
-    {
-      id: "7",
-      label: "S",
-      children: ["0", "1", "8"],
-      secondary: [],
-      flabel: "KL"
-    },
-    {
-      id: "8",
-      label: "VP",
-      children: ["2"],
-      secondary: [{id: "0", label: "SB"}],
-      flabel: "IV"
-    },
-    {
-      id: "9",
-      label: "VP",
-      children: ["4"],
-      secondary: [{id: "0", label: "SB"}],
-      flabel: "IV"
-    },
-    {
-      id: "10",
-      label: "S",
-      children: ["9"],
-      secondary: [{id: "0", label: "SB"}, {id: "1", label: "HD"}],
-      flabel: "KL"
-    })
-
-  G({id: "0", label: "—", children: [], secondary: []},
-    {
-      id: "1",
-      label: "Men",
-      flabel: "DF",
-      children: [],
-      secondary: []
-    },
-    {
-      id: "2",
-      label: "vad",
-      flabel: "OO",
-      children: [],
-      secondary: []
-    },
-    {
-      id: "3",
-      label: "ska",
-      flabel: "HD",
-      children: [],
-      secondary: []
-    },
-    {
-      id: "4",
-      label: "jag",
-      flabel: "SB",
-      children: [],
-      secondary: []
-    },
-    {id: "5", label: "då", flabel: "MD", children: [], secondary: []},
-    {id: "6", label: "ta", flabel: "ME", children: [], secondary: []},
-    {
-      id: "7",
-      label: "mej",
-      flabel: "OO",
-      children: [],
-      secondary: []
-    },
-    {
-      id: "8",
-      label: "till",
-      flabel: "HD",
-      children: [],
-      secondary: []
-    },
-    {id: "9", label: "!", children: [], secondary: []},
-    {
-      id: "10",
-      label: "VBM",
-      children: ["6"],
-      secondary: [{id: "8", label: "ME"}, {id: "7", label: "ME"}],
-      flabel: "HD"
-    },
-    {
-      id: "11",
-      label: "VP",
-      children: ["13", "10", "7"],
-      secondary: [{id: "4", label: "SB"}],
-      flabel: "IV"
-    },
-    {
-      id: "12",
-      label: "S",
-      children: ["1", "11", "3", "4", "5"],
-      secondary: []
-    },
-    {
-      id: "13",
-      label: "PP",
-      children: ["2", "8"],
-      secondary: [],
-      flabel: "OA"
-    }
-  )
-
   G({id: "0", label: "Ni", flabel: "SB", children: [], secondary: []},
-    {
-      id: "1",
-      label: "kommer",
-      flabel: "HD",
-      children: [],
-      secondary: []
-    },
-    {
-      id: "2",
-      label: "att",
-      flabel: "HD",
-      children: [],
-      secondary: []
-    },
+    { id: "1", label: "kommer", flabel: "HD", children: [], secondary: [] },
+    { id: "2", label: "att", flabel: "HD", children: [], secondary: [] },
     {id: "3", label: "bo", flabel: "HD", children: [], secondary: []},
     {id: "4", label: "i", flabel: "HD", children: [], secondary: []},
-    {
-      id: "5",
-      label: "mitt",
-      flabel: "DT",
-      children: [],
-      secondary: []
-    },
-    {
-      id: "6",
-      label: "hus",
-      flabel: "HD",
-      children: [],
-      secondary: []
-    },
+    { id: "5", label: "mitt", flabel: "DT", children: [], secondary: [] },
+    { id: "6", label: "hus", flabel: "HD", children: [], secondary: [] },
     {id: "7", label: "så", flabel: "ME", children: [], secondary: []},
-    {
-      id: "8",
-      label: "länge",
-      flabel: "HD",
-      children: [],
-      secondary: []
-    },
+    { id: "8", label: "länge", flabel: "HD", children: [], secondary: [] },
     {id: "9", label: "ni", flabel: "SB", children: [], secondary: []},
-    {
-      id: "10",
-      label: "är",
-      flabel: "HD",
-      children: [],
-      secondary: []
-    },
+    { id: "10", label: "är", flabel: "HD", children: [], secondary: [] },
     {id: "11", label: "i", flabel: "HD", children: [], secondary: []},
-    {
-      id: "12",
-      label: "Kaimana",
-      flabel: "OO",
-      children: [],
-      secondary: []
-    },
+    { id: "12", label: "Kaimana", flabel: "OO", children: [], secondary: [] },
     {id: "13", label: ",", children: [], secondary: []},
-    {
-      id: "14",
-      label: "jag",
-      flabel: "SB",
-      children: [],
-      secondary: []
-    },
-    {
-      id: "15",
-      label: "ska",
-      flabel: "HD",
-      children: [],
-      secondary: []
-    },
-    {
-      id: "16",
-      label: "nog",
-      flabel: "MD",
-      children: [],
-      secondary: []
-    },
-    {
-      id: "17",
-      label: "ordna",
-      flabel: "HD",
-      children: [],
-      secondary: []
-    },
-    {
-      id: "18",
-      label: "den",
-      flabel: "DT",
-      children: [],
-      secondary: []
-    },
-    {
-      id: "19",
-      label: "saken",
-      flabel: "HD",
-      children: [],
-      secondary: []
-    },
+    { id: "14", label: "jag", flabel: "SB", children: [], secondary: [] },
+    { id: "15", label: "ska", flabel: "HD", children: [], secondary: [] },
+    { id: "16", label: "nog", flabel: "MD", children: [], secondary: [] },
+    { id: "17", label: "ordna", flabel: "HD", children: [], secondary: [] },
+    { id: "18", label: "den", flabel: "DT", children: [], secondary: [] },
+    { id: "19", label: "saken", flabel: "HD", children: [], secondary: [] },
     {id: "20", label: ",", children: [], secondary: []},
-    {
-      id: "21",
-      label: "men",
-      flabel: "PH",
-      children: [],
-      secondary: []
-    },
-    {
-      id: "22",
-      label: "nu",
-      flabel: "MD",
-      children: [],
-      secondary: []
-    },
-    {
-      id: "23",
-      label: "ska",
-      flabel: "HD",
-      children: [],
-      secondary: []
-    },
-    {
-      id: "24",
-      label: "vi",
-      flabel: "SB",
-      children: [],
-      secondary: []
-    },
-    {
-      id: "25",
-      label: "ombord",
-      flabel: "RA",
-      children: [],
-      secondary: []
-    },
-    {
-      id: "26",
-      label: "och",
-      flabel: "PH",
-      children: [],
-      secondary: []
-    },
-    {
-      id: "27",
-      label: "äta",
-      flabel: "HD",
-      children: [],
-      secondary: []
-    },
-    {
-      id: "28",
-      label: "det",
-      flabel: "DT",
-      children: [],
-      secondary: []
-    },
-    {
-      id: "29",
-      label: "sista",
-      flabel: "HD",
-      children: [],
-      secondary: []
-    },
-    {
-      id: "30",
-      label: "civiliserade",
-      flabel: "MD",
-      children: [],
-      secondary: []
-    },
-    {
-      id: "31",
-      label: "mål",
-      flabel: "HD",
-      children: [],
-      secondary: []
-    },
-    {
-      id: "32",
-      label: "mat",
-      flabel: "HD",
-      children: [],
-      secondary: []
-    },
-    {
-      id: "33",
-      label: "ni",
-      flabel: "SB",
-      children: [],
-      secondary: []
-    },
-    {
-      id: "34",
-      label: "får",
-      flabel: "HD",
-      children: [],
-      secondary: []
-    },
-    {
-      id: "35",
-      label: "på",
-      flabel: "HD",
-      children: [],
-      secondary: []
-    },
-    {
-      id: "36",
-      label: "två",
-      flabel: "DT",
-      children: [],
-      secondary: []
-    },
-    {
-      id: "37",
-      label: "månader",
-      flabel: "HD",
-      children: [],
-      secondary: []
-    },
+    { id: "21", label: "men", flabel: "PH", children: [], secondary: [] },
+    { id: "22", label: "nu", flabel: "MD", children: [], secondary: [] },
+    { id: "23", label: "ska", flabel: "HD", children: [], secondary: [] },
+    { id: "24", label: "vi", flabel: "SB", children: [], secondary: [] },
+    { id: "25", label: "ombord", flabel: "RA", children: [], secondary: [] },
+    { id: "26", label: "och", flabel: "PH", children: [], secondary: [] },
+    { id: "27", label: "äta", flabel: "HD", children: [], secondary: [] },
+    { id: "28", label: "det", flabel: "DT", children: [], secondary: [] },
+    { id: "29", label: "sista", flabel: "HD", children: [], secondary: [] },
+    { id: "30", label: "civiliserade", flabel: "MD", children: [], secondary: [] },
+    { id: "31", label: "mål", flabel: "HD", children: [], secondary: [] },
+    { id: "32", label: "mat", flabel: "HD", children: [], secondary: [] },
+    { id: "33", label: "ni", flabel: "SB", children: [], secondary: [] },
+    { id: "34", label: "får", flabel: "HD", children: [], secondary: [] },
+    { id: "35", label: "på", flabel: "HD", children: [], secondary: [] },
+    { id: "36", label: "två", flabel: "DT", children: [], secondary: [] },
+    { id: "37", label: "månader", flabel: "HD", children: [], secondary: [] },
     {id: "38", label: ".", children: [], secondary: []},
-    {
-      id: "39",
-      label: "NP",
-      children: ["18", "19"],
-      secondary: [],
-      flabel: "OO"
-    },
-    {
-      id: "40",
-      label: "VP",
-      children: ["17", "39"],
-      secondary: [{id: "14", label: "SB"}],
-      flabel: "IV"
-    },
-    {
-      id: "41",
-      label: "S",
-      children: ["14", "15", "16", "40"],
-      secondary: [],
-      flabel: "DF"
-    },
-    {
-      id: "42",
-      label: "PP",
-      children: ["11", "12"],
-      secondary: [],
-      flabel: "RA"
-    },
-    {
-      id: "43",
-      label: "ABM",
-      children: ["7"],
-      secondary: [{id: "8", label: "ME"}],
-      flabel: "MD"
-    },
-    {
-      id: "44",
-      label: "S",
-      children: ["9", "10", "42"],
-      secondary: [],
-      flabel: "OO"
-    },
-    {
-      id: "45",
-      label: "NP",
-      children: ["5", "6"],
-      secondary: [],
-      flabel: "OO"
-    },
-    {
-      id: "46",
-      label: "PP",
-      children: ["4", "45"],
-      secondary: [],
-      flabel: "RA"
-    },
-    {
-      id: "47",
-      label: "VP",
-      children: ["3", "46", "62"],
-      secondary: [{id: "0", label: "SB"}],
-      flabel: "OO"
-    },
-    {
-      id: "48",
-      label: "S",
-      children: ["0", "1", "58", "41"],
-      secondary: [],
-      flabel: "KL"
-    },
-    {
-      id: "49",
-      label: "NP",
-      children: ["36", "37"],
-      secondary: [],
-      flabel: "OO"
-    },
-    {
-      id: "50",
-      label: "PP",
-      children: ["35", "49"],
-      secondary: [],
-      flabel: "MD"
-    },
-    {
-      id: "51",
-      label: "S",
-      children: ["33", "34"],
-      secondary: [{id: "32", label: "OO"}],
-      flabel: "MD"
-    },
-    {
-      id: "52",
-      label: "NP",
-      children: ["28", "59", "30", "31", "60"],
-      secondary: [],
-      flabel: "OO"
-    },
-    {
-      id: "53",
-      label: "VP",
-      children: ["27", "52"],
-      secondary: [{id: "24", label: "SB"}],
-      flabel: "IV"
-    },
-    {
-      id: "54",
-      label: "S",
-      children: ["22", "23", "24", "25"],
-      secondary: [],
-      flabel: "KL"
-    },
-    {
-      id: "55",
-      label: "KoP",
-      children: ["54", "26", "56"],
-      secondary: [],
-      flabel: "KL"
-    },
-    {
-      id: "56",
-      label: "S",
-      children: ["53"],
-      secondary: [
-        {id: "22", label: "MD"},
-        {id: "24", label: "SB"},
-        {id: "23", label: "HD"}
-      ],
-      flabel: "KL"
-    },
-    {
-      id: "57",
-      label: "KoP",
-      children: ["48", "21", "55"],
-      secondary: []
-    },
-    {
-      id: "58",
-      label: "SuP",
-      children: ["2", "47"],
-      secondary: [],
-      flabel: "IV"
-    },
-    {
-      id: "59",
-      label: "AjP",
-      children: ["29", "50"],
-      secondary: [],
-      flabel: "MD"
-    },
-    {
-      id: "60",
-      label: "NP",
-      children: ["32", "51"],
-      secondary: [],
-      flabel: "MD"
-    },
-    {
-      id: "61",
-      label: "AbP",
-      children: ["43", "8"],
-      secondary: [],
-      flabel: "PH"
-    },
-    {
-      id: "62",
-      label: "SuP",
-      children: ["61", "44"],
-      secondary: [],
-      flabel: "MD"
-    }
+    { id: "39", label: "NP", children: ["18", "19"], secondary: [], flabel: "OO" },
+    { id: "40", label: "VP", children: ["17", "39"], secondary: [{id: "14", label: "SB"}], flabel: "IV" },
+    { id: "41", label: "S", children: ["14", "15", "16", "40"], secondary: [], flabel: "DF" },
+    { id: "42", label: "PP", children: ["11", "12"], secondary: [], flabel: "RA" },
+    { id: "43", label: "ABM", children: ["7"], secondary: [{id: "8", label: "ME"}], flabel: "MD" },
+    { id: "44", label: "S", children: ["9", "10", "42"], secondary: [], flabel: "OO" },
+    { id: "45", label: "NP", children: ["5", "6"], secondary: [], flabel: "OO" },
+    { id: "46", label: "PP", children: ["4", "45"], secondary: [], flabel: "RA" },
+    { id: "47", label: "VP", children: ["3", "46", "62"], secondary: [{id: "0", label: "SB"}], flabel: "OO" },
+    { id: "48", label: "S", children: ["0", "1", "58", "41"], secondary: [], flabel: "KL" },
+    { id: "49", label: "NP", children: ["36", "37"], secondary: [], flabel: "OO" },
+    { id: "50", label: "PP", children: ["35", "49"], secondary: [], flabel: "MD" },
+    { id: "51", label: "S", children: ["33", "34"], secondary: [{id: "32", label: "OO"}], flabel: "MD" },
+    { id: "52", label: "NP", children: ["28", "59", "30", "31", "60"], secondary: [], flabel: "OO" },
+    { id: "53", label: "VP", children: ["27", "52"], secondary: [{id: "24", label: "SB"}], flabel: "IV" },
+    { id: "54", label: "S", children: ["22", "23", "24", "25"], secondary: [], flabel: "KL" },
+    { id: "55", label: "KoP", children: ["54", "26", "56"], secondary: [], flabel: "KL" },
+    { id: "56", label: "S", children: ["53"], secondary: [ {id: "22", label: "MD"}, {id: "24", label: "SB"}, {id: "23", label: "HD"} ], flabel: "KL" },
+    { id: "57", label: "KoP", children: ["48", "21", "55"], secondary: [] },
+    { id: "58", label: "SuP", children: ["2", "47"], secondary: [], flabel: "IV" },
+    { id: "59", label: "AjP", children: ["29", "50"], secondary: [], flabel: "MD" },
+    { id: "60", label: "NP", children: ["32", "51"], secondary: [], flabel: "MD" },
+    { id: "61", label: "AbP", children: ["43", "8"], secondary: [], flabel: "PH" },
+    { id: "62", label: "SuP", children: ["61", "44"], secondary: [], flabel: "MD" }
   )
 
 
@@ -812,83 +487,6 @@ if (true) {
   )
 
   G(
-      {id: '0', label: "Detta", flabel: "OO"},
-      {id: '1', label: "kan", flabel: "HD"},
-      {id: '2', label: "åtminstone", flabel: "MD"},
-      {id: '3', label: "jag", flabel: "SB"},
-      {id: '4', label: "personligen", flabel: "HD"},
-      {id: '5', label: "helt", flabel: "KL"},
-      {id: '6', label: "och", flabel: "PH"},
-      {id: '7', label: "hållet", flabel: "KL"},
-      {id: '8', label: "instämma", flabel: "HD"},
-      {id: '9', label: "i", flabel: "HD"},
-      {id: '10', label: "."},
-      {id: '12', label: "S", children: ['15', '1', '14', '3']},
-      {id: '13', label: "PP", children: ['0', '9'], flabel: "MD"},
-      {id: '14', label: "AbP", children: ['2', '4'], flabel: "MD"},
-      {id: '11', label: "KoP", children: ['5', '6', '7'], flabel: "MD"},
-      {id: '15', label: "VP", children: ['13', '11', '8'], flabel: "IV"}
-  )
-
-  G(
-      {id: '0', label: "Detta", flabel: "OO"},
-      {id: '1', label: "kan", flabel: "HD"},
-      {id: '2', label: "åtminstone", flabel: "MD"},
-      {id: '3', label: "jag", flabel: "SB"},
-      {id: '4', label: "personligen", flabel: "HD"},
-      {id: '5', label: "helt", flabel: "KL"},
-      {id: '6', label: "och", flabel: "PH"},
-      {id: '7', label: "hållet", flabel: "KL"},
-      {id: '8', label: "instämma", flabel: "HD"},
-      {id: '9', label: "i", flabel: "HD"},
-      {id: '10', label: "."},
-      {id: '11', label: "KoP", children: ['5', '6', '7'], flabel: "MD"},
-      {id: '12', label: "S", children: ['15', '1', '14', '3']},
-      {id: '13', label: "PP", children: ['0', '9'], flabel: "MD"},
-      {id: '14', label: "AbP", children: ['2', '4'], flabel: "MD"},
-      {id: '15', label: "VP", children: ['13', '11', '8'], flabel: "IV"}
-  )
-
-  G(
-      {id: '0', label: "Detta", flabel: "OO"},
-      {id: '1', label: "kan", flabel: "HD"},
-      {id: '2', label: "åtminstone", flabel: "MD"},
-      {id: '3', label: "jag", flabel: "SB"},
-      {id: '4', label: "personligen", flabel: "HD"},
-      {id: '5', label: "helt", flabel: "KL"},
-      {id: '6', label: "och", flabel: "PH"},
-      {id: '7', label: "hållet", flabel: "KL"},
-      {id: '8', label: "instämma", flabel: "HD"},
-      {id: '9', label: "i", flabel: "HD"},
-      {id: '10', label: "."},
-      {id: '14', label: "AbP", children: ['2', '4'], flabel: "MD"},
-      {id: '12', label: "S", children: ['15', '1', '14', '3']},
-      {id: '13', label: "PP", children: ['0', '9'], flabel: "MD"},
-      {id: '11', label: "KoP", children: ['5', '6', '7'], flabel: "MD"},
-      {id: '15', label: "VP", children: ['13', '11', '8'], flabel: "IV"}
-  )
-
-  G(
-      {id: '0', label: "Detta", flabel: "OO"},
-      {id: '1', label: "kan", flabel: "HD"},
-      {id: '2', label: "åtminstone", flabel: "MD"},
-      {id: '3', label: "jag", flabel: "SB"},
-      {id: '4', label: "personligen", flabel: "HD"},
-      {id: '5', label: "helt", flabel: "KL"},
-      {id: '6', label: "och", flabel: "PH"},
-      {id: '7', label: "hållet", flabel: "KL"},
-      {id: '8', label: "instämma", flabel: "HD"},
-      {id: '9', label: "i", flabel: "HD"},
-      {id: '10', label: "."},
-      {id: '14', label: "AbP", children: ['2', '4'], flabel: "MD"},
-      {id: '12', label: "S", children: ['15', '1', '14', '3']},
-      {id: '11', label: "KoP", children: ['5', '6', '7'], flabel: "MD"},
-      {id: '13', label: "PP", children: ['0', '9'], flabel: "MD"},
-      {id: '15', label: "VP", children: ['13', '11', '8'], flabel: "IV"}
-  )
-
-  G(
-  /*
     {id: 0, label: "Först", flabel: "MD"},
     {id: 1, label: "skulle", flabel: "HD"},
     {id: 2, label: "jag", flabel: "SB"},
@@ -907,7 +505,6 @@ if (true) {
     {id: 15, label: "ord", flabel: "HD"},
     {id: 16, label: "och", flabel: "PH"},
     {id: 17, label: "att", flabel: "HD"},
-      */
     {id: '18', label: "det", flabel: "SB"},
     {id: '19', label: "nu", flabel: "HD"},
     {id: '20', label: ","},
