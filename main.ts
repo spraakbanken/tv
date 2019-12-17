@@ -327,7 +327,8 @@ body(
     return div(
       ...trees
     )
-  }, 0),
+  }, 500 // this can be decreased when working with examples
+  ),
 )(document.body)
 
 function edit_tree(spec0: Spec<string>) {
@@ -340,16 +341,25 @@ function edit_tree(spec0: Spec<string>) {
       return f(e)
     }
   }
+
   return [
-    track(tmp,
-      spec => div(
-        try_(() => draw_tree(spec), e => div(e.toString())),
-        { ondblclick: () => vis.modify(b => !b) }
-      )
-    ),
-    track(vis, v => div(
-      v && json_textarea(tmp, { onblur: () => vis.set(false) })
-    ))
+    div(
+      css`display: flex; flex-direction: row`,
+      css`& > * { margin-right: 10px }`,
+
+      track(tmp,
+        spec => div(
+          css`flex-grow: 1`,
+          try_(() => draw_tree(spec), e => div(e.toString())),
+          { ondblclick: () => vis.modify(b => !b) }
+        )
+      ),
+
+      track(vis, v => div(
+        v && json_textarea(tmp, { onblur: () => false && vis.set(false) })
+      )),
+
+    )
   ]
 }
 
@@ -357,8 +367,8 @@ function json_textarea(tmp: Store<any>, ...opts: any[]) {
   return with_ref(
     (dom: HTMLTextAreaElement) => dom.value = pretty(tmp.get()),
     textarea({
-      rows: '25',
-      cols: '120',
+      rows: '20',
+      cols: '80',
       oninput(e: InputEvent) {
         if (!e.target || !(e.target instanceof HTMLTextAreaElement)) return
         try {
