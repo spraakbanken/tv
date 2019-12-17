@@ -19,7 +19,7 @@ export function sentences(xml_string: string): Element[] {
   if (xml && !err) {
     return $(xml, 's')
   }
-  console.warn(err.innerText)
+  console.warn(err.innerText, xml_string)
   return []
 }
 

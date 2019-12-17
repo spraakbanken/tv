@@ -127,11 +127,11 @@ const msg = domdiff.forward(domdiff.template_to_string, (message: string) => {
 })
 
 const koala_files: string[] = [
-  './Eukalyptus_Public.xml',
-  './Eukalyptus_Blog.xml',
-  './Eukalyptus_Europarl.xml',
-  './Eukalyptus_Romaner.xml',
-  './Eukalyptus_Wikipedia.xml',
+  require('./static/Eukalyptus_Public.xml'),
+  require('./static/Eukalyptus_Blog.xml'),
+  require('./static/Eukalyptus_Europarl.xml'),
+  require('./static/Eukalyptus_Romaner.xml'),
+  require('./static/Eukalyptus_Wikipedia.xml'),
 ]
 
 async function load_koala() {
