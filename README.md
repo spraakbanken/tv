@@ -9,6 +9,14 @@ This library draws syntax trees in the browser using SVG. It has support for:
 
 A live version is running on http://demo.spraakdata.gu.se/dan/koala/
 
+## Installing locally
+
+Install the dependencies by running:
+
+```
+yarn
+```
+
 ## Running locally
 
 Bundling the typescript code is done with parcel:
@@ -26,6 +34,14 @@ There is as script to build and deploy at Språkbanken's demo server:
 ```
 yarn run deploy
 ```
+
+# API
+
+The main export is `draw_tree` in `trees.ts`. It takes a specification
+in the internal format outlined below and returns a function
+`() => Element` which when run produces a DOM Element Node to be
+attached into the document. As a side effect it will add a `<style>`
+node into `<head>`.
 
 # Layouting strategy
 
